@@ -1,0 +1,15 @@
+#!/bin/sh
+# Linbox OS live-config component: make the live session autologin use Plasma (Wayland).
+# live-config's 0085-sddm only picks a session when x-session-manager is startplasma-x11,
+# which Linbox does not ship, so it would write an empty Session=.
+set -e
+
+if [ ! -e /var/lib/live/config/sddm ] || [ -e /var/lib/live/config/linbox-sddm-session ]; then
+	exit 0
+fi
+
+if [ -f /etc/sddm.conf ] && [ -e /usr/share/wayland-sessions/plasma.desktop ]; then
+	sed -i -e 's/^Session=.*/Session=plasma.desktop/' /etc/sddm.conf
+fi
+
+touch /var/lib/live/config/linbox-sddm-session

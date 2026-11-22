@@ -1,0 +1,4 @@
+# Live-session machinery (removed from the installed system by Calamares' packages module)
+live-boot
+live-config
+live-config-systemd

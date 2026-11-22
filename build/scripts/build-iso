@@ -1,0 +1,156 @@
+#!/bin/bash
+# Build the Linbox OS live ISO. Runs INSIDE a privileged Debian 13 container as root
+# (see build-in-docker). Reads only from the source tree; writes only to $WORK and $OUT.
+#
+#   SRC   source tree (read-only use)          default: /src
+#   WORK  scratch space (chroot, cache)         default: /work
+#   OUT   artefacts                             default: $SRC/out
+#   BUILD_ID                                    default: YYYYMMDD.local
+set -euo pipefail
+
+SRC=${SRC:-/src}
+WORK=${WORK:-/work}
+OUT=${OUT:-$SRC/out}
+MANIFEST=${MANIFEST:-$SRC/build/manifests/linbox-1.yaml}
+
+log() { printf '\n==> %s\n' "$*"; }
+
+[ "$(id -u)" -eq 0 ] || { echo "E: must run as root inside the build container" >&2; exit 1; }
+
+# --- 1. Read the manifest -----------------------------------------------------
+# The container's own apt is pointed at the same snapshot first, so build tools are pinned too.
+SNAPSHOT=$(sed -n 's/^  snapshot: "\(.*\)"$/\1/p' "$MANIFEST")
+[ -n "$SNAPSHOT" ] || { echo "E: no base.snapshot in $MANIFEST" >&2; exit 1; }
+SNAP=http://snapshot.debian.org/archive/debian/$SNAPSHOT
+SNAP_SEC=http://snapshot.debian.org/archive/debian-security/$SNAPSHOT
+
+log "Pinning build container apt to snapshot $SNAPSHOT"
+rm -f /etc/apt/sources.list.d/debian.sources
+cat > /etc/apt/sources.list.d/snapshot.sources <<EOF
+Types: deb
+URIs: $SNAP
+Suites: trixie trixie-updates
+Components: main
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+Check-Valid-Until: no
+
+Types: deb
+URIs: $SNAP_SEC
+Suites: trixie-security
+Components: main
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+Check-Valid-Until: no
+EOF
+export DEBIAN_FRONTEND=noninteractive
+apt-get -o Acquire::Retries=5 update -q
+apt-get -o Acquire::Retries=5 install -y -q --no-install-recommends \
+	live-build debootstrap python3 python3-yaml build-essential dpkg-dev debhelper fakeroot \
+	xorriso squashfs-tools mtools dosfstools ca-certificates cpio
+
+eval "$(python3 - "$MANIFEST" <<'PY'
+import shlex, sys, yaml
+m = yaml.safe_load(open(sys.argv[1]))
+r, b = m["release"], m["base"]
+assert b["distribution"] == "debian" and m["display"]["xorg"] is False
+for k, v in {
+    "VERSION": r["version"], "STAGE": r["stage"], "ARCH": r["arch"],
+    "SUITE": b["suite"], "AREAS": " ".join(b["components"]),
+}.items():
+    print(f"{k}={shlex.quote(str(v))}")
+PY
+)"
+
+BUILD_ID=${BUILD_ID:-$(date -u +%Y%m%d).local}
+export SOURCE_DATE_EPOCH
+SOURCE_DATE_EPOCH=$(date -u -d "$(echo "$SNAPSHOT" | sed -E 's/(....)(..)(..)T(..)(..)(..)Z/\1-\2-\3T\4:\5:\6Z/')" +%s)
+NAME="linbox-os-${VERSION}-${STAGE}-${BUILD_ID}-${ARCH}"
+GIT_COMMIT=${GIT_COMMIT:-unknown}
+
+# --- 2. Build Linbox packages -------------------------------------------------
+log "Building Linbox packages"
+rm -rf "$WORK/pkgs" && mkdir -p "$WORK/pkgs/debs"
+for dir in "$SRC"/packages/*/; do
+	[ -d "$dir/debian" ] || continue
+	name=$(basename "$dir")
+	cp -a "$dir" "$WORK/pkgs/$name"
+	(cd "$WORK/pkgs/$name" && dpkg-buildpackage -b -us -uc)
+done
+mv "$WORK"/pkgs/*.deb "$WORK/pkgs/debs/"
+ls -l "$WORK/pkgs/debs"
+
+# --- 3. Configure live-build --------------------------------------------------
+log "Configuring live-build"
+LB=$WORK/lb
+if [ -d "$LB" ]; then (cd "$LB" && lb clean --purge >/dev/null 2>&1 || true); fi
+rm -rf "$LB" && mkdir -p "$LB"
+cd "$LB"
+
+lb config \
+	--mode debian \
+	--distribution "$SUITE" \
+	--architecture "$ARCH" \
+	--archive-areas "$AREAS" \
+	--mirror-bootstrap "$SNAP" \
+	--mirror-chroot "$SNAP" \
+	--mirror-chroot-security "$SNAP_SEC" \
+	--mirror-binary "http://deb.debian.org/debian/" \
+	--mirror-binary-security "http://security.debian.org/debian-security/" \
+	--security true \
+	--updates true \
+	--debian-installer none \
+	--cache-packages false \
+	--uefi-secure-boot enable \
+	--bootappend-live "boot=live components console=tty0 console=ttyS0,115200n8" \
+	--iso-volume "Linbox OS ${VERSION} ${STAGE}" \
+	--iso-application "Linbox OS" \
+	--iso-publisher "Linbox; https://linbox.in" \
+	--iso-preparer "linbox-os build/scripts/build-iso" \
+	--checksums sha256 \
+	--zsync false
+
+# Snapshot Release files are expired by design; same tweak as Debian's own rebuild.sh.
+sed -i -e '/^APT_OPTIONS=/s/--yes/--yes -o Acquire::Check-Valid-Until=false -o Acquire::Retries=5/' config/common
+
+cp -a "$SRC/build/live-build/config/." config/
+mkdir -p config/packages.chroot
+cp "$WORK"/pkgs/debs/*.deb config/packages.chroot/
+# Debian's reproducibility hooks (shipped with live-build)
+if [ -d /usr/share/doc/live-build/examples/hooks/reproducible ]; then
+	cp -a /usr/share/doc/live-build/examples/hooks/reproducible/*.hook.* config/hooks/normal/ 2>/dev/null || true
+fi
+
+LB_VERSION=$(dpkg-query -W -f='${Version}' live-build)
+mkdir -p config/includes.chroot/usr/share/linbox
+python3 - "$MANIFEST" > config/includes.chroot/usr/share/linbox/build-info.json <<PY
+import json, sys, yaml
+m = yaml.safe_load(open(sys.argv[1]))
+print(json.dumps({
+    "name": "Linbox OS", "version": "$VERSION", "stage": "$STAGE", "build_id": "$BUILD_ID",
+    "git_commit": "$GIT_COMMIT", "debian_suite": "$SUITE",
+    "debian_snapshot": "$SNAPSHOT", "source_date_epoch": $SOURCE_DATE_EPOCH,
+    "live_build": "$LB_VERSION",
+}, indent=2))
+PY
+
+# --- 4. Build -----------------------------------------------------------------
+log "Running lb build (this takes a while)"
+set +e
+lb build 2>&1 | tee "$LB/build.log"
+rc=${PIPESTATUS[0]}
+set -e
+mkdir -p "$OUT"
+cp "$LB/build.log" "$OUT/$NAME.build.log"
+if [ "$rc" -ne 0 ] || [ ! -f "$LB/live-image-$ARCH.hybrid.iso" ]; then
+	echo "E: lb build failed (rc=$rc); log: $OUT/$NAME.build.log" >&2
+	exit 1
+fi
+
+# --- 5. Artefacts -------------------------------------------------------------
+log "Writing artefacts to $OUT"
+mv "$LB/live-image-$ARCH.hybrid.iso" "$OUT/$NAME.iso"
+cp "$LB/live-image-$ARCH.packages" "$OUT/$NAME.packages"
+cp config/includes.chroot/usr/share/linbox/build-info.json "$OUT/$NAME.build-info.json"
+(cd "$OUT" && sha256sum "$NAME.iso" "$NAME.packages" > "$NAME.SHA256SUMS")
+cat "$OUT/$NAME.SHA256SUMS"
+echo "$NAME" > "$OUT/LATEST"
+log "Done: $OUT/$NAME.iso"

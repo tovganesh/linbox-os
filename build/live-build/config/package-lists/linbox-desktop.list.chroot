@@ -1,0 +1,29 @@
+# Linbox OS default edition: KDE Plasma 6 on Wayland only (decisions D2, D3).
+# M1 spike selection — becomes the linbox-desktop meta-package in M2.
+# Checked with tools/dep-closure.py; the build hook 9000-linbox-assert-no-xorg enforces it.
+
+kde-plasma-desktop
+plasma-workspace
+kwin-wayland
+xwayland
+
+# "pkg-" = must not be installed. kde-plasma-desktop and sddm otherwise pull these in.
+xserver-xorg-
+xserver-xorg-core-
+kwin-x11-
+
+# SDDM greeter runs on Wayland (kwin_wayland), see /etc/sddm.conf.d/10-linbox-wayland.conf.
+# Debian's sddm package Depends on "xserver-xorg | xserver"; the nested Xephyr server is the
+# smallest provider of "xserver" and is never started. Tracked as risk R10.
+sddm
+xserver-xephyr
+
+konsole
+dolphin
+firefox-esr
+
+calamares
+calamares-settings-debian
+
+# VM integration for testing
+spice-vdagent

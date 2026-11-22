@@ -1,0 +1,19 @@
+#!/bin/sh
+# Linbox OS decision D2: Wayland only. Fail the build if an Xorg server or X11 session sneaks in.
+set -e
+
+bad=""
+for pkg in xserver-xorg xserver-xorg-core xorg xinit kwin-x11; do
+	if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed'; then
+		bad="$bad $pkg"
+	fi
+done
+if [ -e /usr/lib/xorg/Xorg ]; then
+	bad="$bad /usr/lib/xorg/Xorg"
+fi
+
+if [ -n "$bad" ]; then
+	echo "E: Xorg components present in a Wayland-only image:$bad" >&2
+	exit 1
+fi
+echo "P: linbox: no Xorg server or X11 session installed"
