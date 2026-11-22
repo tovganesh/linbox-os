@@ -1,6 +1,6 @@
 # Release process
 
-**Status:** Proposed. Versioning is defined in
+**Status:** Approved (D5/D6, 2026-11-22). Versioning is defined in
 [architecture.md §7](architecture.md#7-versioning).
 
 ## Channels

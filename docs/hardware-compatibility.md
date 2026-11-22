@@ -1,6 +1,6 @@
 # Hardware compatibility strategy
 
-**Status:** Proposed (Phase 1). The database format is defined here; testing
+**Status:** Approved (Phase 1). The database format is defined here; testing
 starts in Phase 4.
 
 ## Principles

@@ -1,6 +1,6 @@
 # Image-building approaches for a Debian 13 base
 
-**Status:** Proposed. This feeds decision **D4** in
+**Status:** Approved (D4, 2026-11-22). This feeds decision **D4** in
 [architecture.md](architecture.md). **Researched:** 2026-11-22.
 
 *Revision 2: the base changed from Ubuntu 26.04 to Debian 13 "trixie". The

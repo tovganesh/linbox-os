@@ -1,7 +1,9 @@
 # Linbox OS — Technical Architecture
 
-**Status:** Proposed (Phase 1). Nothing here is approved until the decisions in
-[§10](#10-decisions) are signed off. **Last verified against upstream:**
+**Status:** Approved (Phase 1). All decisions in [§10](#10-decisions) were
+signed off by the maintainer on 2026-11-22. D11 is approved as a deferral to
+M4. Changes to approved decisions go through a PR that updates §10.
+**Last verified against upstream:**
 2026-11-22.
 
 **Revision 2:** changed the base from Ubuntu 26.04 / Xubuntu to **Debian 13
@@ -246,18 +248,18 @@ Also removed: the Canonical trademark risk.
 | ID | Decision | Status / recommendation | Alternatives |
 |---|---|---|---|
 | **D1** | Base distribution | **Decided (maintainer, 2026-11-22):** Debian 13 trixie, `main` + `non-free-firmware` | Ubuntu 26.04 / Xubuntu (revision 1) |
-| **D2** | Display server | **Decided (maintainer):** Wayland only, no Xorg. *Recommend* keeping Xwayland for app compatibility. | No Xwayland: breaks X11-only developer tools |
+| **D2** | Display server | **Decided (maintainer, 2026-11-22):** Wayland only, no Xorg. **Approved:** Xwayland kept for app compatibility. | No Xwayland: breaks X11-only developer tools |
 | **D3** | Desktop environment | **Decided (maintainer, 2026-11-22):** **KDE Plasma 6 on Wayland** | Xfce 4.20 on labwc (experimental); GNOME 48; custom compositor stack |
-| **D4** | ISO build tool + installer | Recommend **live-build + Calamares** | debian-installer + debian-cd; mkosi/debos (no installer); remastering Debian's live ISO |
-| **D5** | Package hosting | Recommend **reprepro in CI → static hosting at apt.linbox.in** | openSUSE Build Service; aptly; GitHub Pages (size limits) |
-| **D6** | Channel model | `trixie` and `trixie-testing`, promotion without rebuild | Single channel plus tags |
-| **D7** | OS identity | `ID=linbox`, `ID_LIKE=debian`, keep `VERSION_CODENAME=trixie` | Keep `ID=debian` and change only `NAME`/`PRETTY_NAME` |
-| **D8** | App delivery | Debian debs only in base, no snapd, Firefox ESR. Flatpak/Flathub opt-in via Developer Setup. | Flathub enabled by default; Mozilla's APT repo for current Firefox |
-| **D9** | Filesystem and recovery | ext4 default now. Calamares supports Btrfs subvolumes, so evaluate **Btrfs + Snapper as an opt-in** in M5 (§11). | Btrfs + Snapper default from 1.0 |
-| **D10** | Kernel policy | Debian stable kernel. Backports only per tested model. | Backports kernel for everyone (fresher, less tested) |
-| **D11** | Factory provisioning | Decide in M4: d-i preseed vs a preinstalled mkosi/debos image | — |
-| **D12** | Trademark review before the first public ISO | Yes: blocking for the public preview | — |
-| **D13** | CLI language | Python 3, stdlib only | Bash; Go/Rust |
+| **D4** | ISO build tool + installer | **Approved (2026-11-22):** live-build + Calamares | debian-installer + debian-cd; mkosi/debos (no installer); remastering Debian's live ISO |
+| **D5** | Package hosting | **Approved (2026-11-22):** reprepro in CI → static hosting at apt.linbox.in | openSUSE Build Service; aptly; GitHub Pages (size limits) |
+| **D6** | Channel model | **Approved (2026-11-22):** `trixie` and `trixie-testing`, promotion without rebuild | Single channel plus tags |
+| **D7** | OS identity | **Approved (2026-11-22):** `ID=linbox`, `ID_LIKE=debian`, keep `VERSION_CODENAME=trixie` | Keep `ID=debian` and change only `NAME`/`PRETTY_NAME` |
+| **D8** | App delivery | **Approved (2026-11-22):** Debian debs only in base, no snapd, Firefox ESR. Flatpak/Flathub opt-in via Developer Setup. | Flathub enabled by default; Mozilla's APT repo for current Firefox |
+| **D9** | Filesystem and recovery | **Approved (2026-11-22):** ext4 default now. Calamares supports Btrfs subvolumes, so evaluate **Btrfs + Snapper as an opt-in** in M5 (§11). | Btrfs + Snapper default from 1.0 |
+| **D10** | Kernel policy | **Approved (2026-11-22):** Debian stable kernel. Backports only per tested model. | Backports kernel for everyone (fresher, less tested) |
+| **D11** | Factory provisioning | **Approved (2026-11-22):** Decide in M4: d-i preseed vs a preinstalled mkosi/debos image | — |
+| **D12** | Trademark review before the first public ISO | **Approved (2026-11-22):** Yes: blocking for the public preview | — |
+| **D13** | CLI language | **Approved (2026-11-22):** Python 3, stdlib only | Bash; Go/Rust |
 
 ## 11. Recovery and snapshots
 
