@@ -57,7 +57,7 @@ This has several consequences:
 | Base | Debian 13 "trixie" stable, amd64 | Components `main` + **`non-free-firmware`**. Intel Wi-Fi, i915 GuC/HuC and SOF audio need it, and Debian's own installer images include it by default. No `contrib`/`non-free` in the base. |
 | Kernel | Debian `linux-image-amd64` (6.12 LTS) | Debian-signed shim, GRUB and kernel, so Secure Boot works. A newer kernel from `trixie-backports` only for a model with a *tested* need (D10). |
 | Display | **Wayland only.** No Xorg server, no X11 session. | Xwayland stays installed so X11-only apps (some Java/JetBrains/Android tooling, older Electron) still run inside the Wayland session (D2). |
-| Desktop | **Open decision D3.** Upstream Xfce isn't production-ready on Wayland. | See [§3.1](#31-desktop-environment-under-wayland-only). |
+| Desktop | **KDE Plasma 6 (6.3 in trixie) on Wayland** (D3) | SDDM login with a Wayland greeter (to verify in M1), KWin, a Linbox Global Theme. See [§3.1](#31-desktop-environment-under-wayland-only). |
 | Apps | Debian packages. **No snaps.** | Firefox ESR from Debian by default. Flatpak/Flathub offered opt-in through Developer Setup (D8). |
 
 ### 3.1 Desktop environment under "Wayland only"
@@ -78,11 +78,11 @@ for a distribution to rebrand through one packaged Global Theme. It also fits
 the "central configuration package" requirement directly. Keyboard-centric
 users get KWin tiling and shortcuts now, and the Hyprland Focus edition later.
 
-**If keeping Xfce matters more:** use option B as an *experimental* edition
-only, and revisit it as the default when xfwl4 ships stable.
+**Decision (2026-11-22): Plasma 6 on Wayland.** Xfce can come back as an
+experimental edition once xfwl4 ships stable. Because editions are just
+meta-packages, adding one later doesn't affect the base.
 
-The rest of this document is written desktop-neutral where possible.
-Desktop-specific parts are marked *(Plasma, per D3)*.
+Desktop-specific parts below are marked *(Plasma, per D3)*.
 
 ## 4. Build and installer architecture
 
@@ -212,7 +212,7 @@ manifest.
 - **`linbox` CLI:** Python 3, standard library only (D13). It has `--json`
   output for support engineers. Unimplemented commands exit non-zero with a
   clear message; nothing reports false success.
-- **Developer Setup:** a GUI (toolkit follows D3; Qt if Plasma) that runs
+- **Developer Setup:** a Qt/KDE GUI (matching Plasma, per D3) that runs
   **declarative profiles**. Each step says what it installs, where from, and
   how to undo it.
   - Privileged steps go through `pkexec` with narrow polkit actions.
@@ -227,7 +227,7 @@ manifest.
 
 | ID | Risk | Mitigation |
 |---|---|---|
-| R1 | **Wayland-only plus Xfce isn't production-ready upstream.** | D3 (recommend Plasma). If Xfce is kept, ship it as experimental and own the labwc integration. |
+| R1 | **Plasma is heavier than the original XFCE target.** | Ship a curated Plasma subset, not `task-kde-desktop`. Measure idle RAM and boot time in M2 and set a budget. Disable Baloo file indexing by default if it costs too much on 8 GB machines. |
 | R2 | **Some developer tools still need X11.** | Keep Xwayland (D2). Test Android Studio + emulator, JetBrains IDEs, VS Code and Flutter in M3. |
 | R3 | **Newer hardware vs Debian stable's 6.12 kernel and its frozen Mesa/firmware.** | Refurbished business laptops are mostly older, which suits it well. Use backports per model only with a test. Track in the hardware DB. |
 | R4 | **Installer gaps.** Calamares has no unattended mode and no TPM unlock, and Wayland-only live sessions are unverified. | Validate in M1. Factory flow per D11. |
@@ -247,7 +247,7 @@ Also removed: the Canonical trademark risk.
 |---|---|---|---|
 | **D1** | Base distribution | **Decided (maintainer, 2026-11-22):** Debian 13 trixie, `main` + `non-free-firmware` | Ubuntu 26.04 / Xubuntu (revision 1) |
 | **D2** | Display server | **Decided (maintainer):** Wayland only, no Xorg. *Recommend* keeping Xwayland for app compatibility. | No Xwayland: breaks X11-only developer tools |
-| **D3** | Desktop environment | **Needs approval.** Recommend **KDE Plasma 6 (Wayland)**. | Xfce 4.20 on labwc (experimental); GNOME 48; custom compositor stack |
+| **D3** | Desktop environment | **Decided (maintainer, 2026-11-22):** **KDE Plasma 6 on Wayland** | Xfce 4.20 on labwc (experimental); GNOME 48; custom compositor stack |
 | **D4** | ISO build tool + installer | Recommend **live-build + Calamares** | debian-installer + debian-cd; mkosi/debos (no installer); remastering Debian's live ISO |
 | **D5** | Package hosting | Recommend **reprepro in CI → static hosting at apt.linbox.in** | openSUSE Build Service; aptly; GitHub Pages (size limits) |
 | **D6** | Channel model | `trixie` and `trixie-testing`, promotion without rebuild | Single channel plus tags |

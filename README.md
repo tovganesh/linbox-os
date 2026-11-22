@@ -8,7 +8,7 @@ professionally refurbished business laptops.
 ## Direction (initial, pending architecture review)
 
 - Base: Debian 13 "trixie" (amd64), `main` + `non-free-firmware`
-- Display: Wayland only (no Xorg); desktop environment pending decision D3
+- Desktop: KDE Plasma 6 on Wayland only (no Xorg)
 - Packages: APT, the Debian archive + a Linbox repository
 - Filesystem / boot: ext4, GRUB, systemd
 - Audience: developers and technical professionals

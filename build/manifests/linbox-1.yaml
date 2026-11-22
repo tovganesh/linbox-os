@@ -33,7 +33,7 @@ installer:                       # decision D4
 
 editions:
   default:
-    desktop: undecided           # decision D3 — recommended: plasma (Wayland)
+    desktop: plasma              # decision D3 — KDE Plasma 6 on Wayland
     install:
       - linbox-desktop           # meta-package; pulls linbox-base, branding, settings
     live_only:

@@ -9,16 +9,16 @@ IDs (D1…) and risk IDs (R1…) refer to [architecture.md](architecture.md).
 - Architecture proposal, image-build comparison, hardware strategy, release
   and security policy, repo skeleton, image manifest pinned to a Debian
   snapshot.
-- **Exit:** D3–D13 approved or amended. D1 (Debian 13) and D2 (Wayland only)
-  are already decided.
+- **Exit:** D4–D13 approved or amended. D1 (Debian 13), D2 (Wayland only)
+  and D3 (KDE Plasma 6) are already decided.
 
 ## M1 — Build spike (Phase 2a)
 
 - Linux build environment: a privileged Debian 13 container in CI, plus a
   local VM or WSL2 (R6).
-- A minimal live-build config pinned to `snapshot.debian.org`. It contains the
-  chosen desktop (D3) on Wayland, Calamares, and **one trivial test package**
-  from a local repo.
+- A minimal live-build config pinned to `snapshot.debian.org`. It contains
+  Plasma 6 on Wayland (D3), Calamares, and **one trivial test package** from
+  a local repo.
 - Verify the open items:
   - Calamares in a Wayland-only live session
   - the display manager's Wayland greeter
