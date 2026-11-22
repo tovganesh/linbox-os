@@ -15,3 +15,12 @@ professionally refurbished business laptops.
 
 See `docs/` (coming in Phase 1) for the architecture proposal, build guide and
 hardware compatibility strategy.
+
+## License
+
+Linbox OS's own source — build scripts, packaging, configuration, tools and
+documentation in this repository — is licensed under the
+[Apache License 2.0](LICENSE).
+
+Ubuntu packages and other third-party software included in Linbox OS images
+keep their own upstream licences.
