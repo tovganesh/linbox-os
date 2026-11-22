@@ -1,134 +1,124 @@
-# Image-building approaches for Ubuntu 26.04 LTS
+# Image-building approaches for a Debian 13 base
 
-**Status:** Proposed. This feeds decision **D2** in [architecture.md](architecture.md).
-**Researched:** 2026-11-22.
+**Status:** Proposed. This feeds decision **D4** in
+[architecture.md](architecture.md). **Researched:** 2026-11-22.
+
+*Revision 2: the base changed from Ubuntu 26.04 to Debian 13 "trixie". The
+Ubuntu options (livecd-rootfs, livefs-editor, ubuntu-image, the subiquity
+installer) no longer apply.*
 
 ## What we need from the tool
 
 1. **Reproducible from git.** The same commit plus the same pinned inputs
    gives an equivalent image, buildable in CI.
-2. **Keeps the stock Ubuntu installer working.** That means the Flutter UI on
-   subiquity, its layered squashfs, TPM-FDE support, and autoinstall.
-3. **Low maintenance.** Linbox is a small team, and every release cycle must
-   not mean re-learning the image tool.
-4. **Keeps the Secure Boot chain intact.** The tool must not re-sign shim,
-   GRUB or the kernel.
-5. **Supported or documented by Canonical**, where possible.
+2. **A graphical installer** for end users that supports encryption and
+   sensible partitioning, and works in a Wayland-only live session.
+3. **Low maintenance** for a small team.
+4. **Keeps Debian's Secure Boot chain intact** (shim → GRUB → kernel, all
+   signed by Debian).
+5. **The tool Debian itself uses**, where possible.
 
 ## Candidates
 
-### A. livefs-editor: remaster a pinned Xubuntu ISO *(recommended)*
+### A. live-build + Calamares *(recommended)*
 
-Canonical's image cookbook calls
-[livefs-editor](https://github.com/mwhudson/livefs-editor) "the tool of choice"
-for customising an existing live-installer ISO. It recommends it over patching
-livecd-rootfs or ubuntu-cdimage, which the cookbook calls tedious and
-error-prone. It's driven by a YAML action file. Documented actions include
-copying files in, `install-packages`, removing pool packages and
-`replace-kernel`.
+live-build is Debian's own live-system builder, maintained by the Debian
+Live team. The official Debian live ISOs are built with it, using configs in
+the live team's `live-setup` repository, and they ship Calamares as the
+installer.
 
-- **Pros:** small, declarative, scriptable in CI. It reuses the exact,
-  flavour-tested Xubuntu ISO, installer and layer structure. Inputs are
-  pinned by SHA-256 and verified against Canonical's GPG-signed `SHA256SUMS`.
-  Fast builds, measured in minutes rather than hours.
-- **Cons:** our image inherits upstream's choices and we can only add or
-  remove on top. Its behaviour with the **layered Desktop installer ISO** is
-  undocumented, since the cookbook example is a Server ISO. We need to prove
-  that packages land in the layer the installer copies to disk, not just the
-  live session (risk R5). It's maintained by a Canonical engineer, but it's a
-  small project.
-- **Maintenance:** low, as long as Xubuntu keeps publishing ISOs. The upstream
-  pin is bumped deliberately for each point release.
+- **Pros:**
+  - The same toolchain as official Debian live images, so we can start from
+    their published configs.
+  - Configuration is a plain directory tree (package lists, chroot hooks,
+    `includes.chroot`), which fits git well.
+  - Builds run in a Debian container.
+  - Debian's reproducible-builds work already rebuilds these images: the
+    squashfs reproduces, the full ISO not yet.
+  - Pointing it at `snapshot.debian.org` pins every package version.
+  - Calamares provides LUKS encryption, Btrfs subvolume layouts and
+    branding/slideshow modules.
+- **Cons:**
+  - live-build's documentation is dated.
+  - Calamares is a separate upstream project (packaged in Debian) that we'll
+    configure heavily.
+  - Calamares has no unattended mode and no TPM unlock.
+  - Calamares in a Wayland-only live session needs M1 validation.
+- **Maintenance:** low to medium. The config is ours, and the tool is
+  Debian-packaged and stable across releases.
 
-### B. livecd-rootfs: build like Canonical does
+### B. debian-installer (d-i) + debian-cd, with preseed
 
-The cookbook says livecd-rootfs is what Canonical uses for preinstalled and
-installer images "as of 2026". It documents
-`PROJECT=xubuntu SUBPROJECT=minimal SUITE=resolute` with the
-`auto/clean → auto/config → auto/build` flow. Official builds run as livefs
-builds on Launchpad, orchestrated by `ubuntu-cdimage`.
+The official Debian installer ISO, customised with a preseed file and extra
+packages.
 
-- **Pros:** the real pipeline. We can control seeds, layers and every package
-  from first principles, and it builds exactly the image types Ubuntu ships.
-- **Cons:** a Canonical engineer describes direct use as extremely
-  challenging; it isn't designed as a single script. The full ISO assembly
-  also involves `ubuntu-cdimage`/`debian-cd`. There are significant changes
-  between releases, the build is slow and heavy, and it must run on a host of
-  the same series. A "craft" replacement is being developed, so the tool
-  itself will change under us.
-- **Maintenance:** high. It's the right tool if we later need our own seeds
-  or layers, or if remastering proves insufficient.
+- **Pros:** the most battle-tested Debian installer. **Fully unattended with
+  preseed**, which is ideal for factory installs. Secure Boot supported.
+- **Cons:** no live session, so users can't try the OS first and the first
+  impression is weaker. Customising debian-cd is heavier than live-build.
+- **Assessment:** not the consumer ISO. It's the **leading candidate for
+  factory provisioning** (D11).
 
-### C. Cubic
+### C. mkosi (systemd project)
 
-A GUI wizard that chroots into an extracted ISO.
+A declarative image builder (`mkosi.conf`) that produces disk images,
+including signed UKIs, in a well-maintained, reproducible-minded way.
 
-- **Pros:** approachable for one-off customisation.
-- **Cons:** interactive, so not reproducible from git or CI. It's a
-  third-party tool, and its 26.04 status is unverified (the community reports
-  library issues). **Rejected** as a primary tool. Fine for prototyping a
-  look.
+- **Pros:** modern, declarative, fast; excellent for **VM test images and
+  preinstalled disk images**.
+- **Cons:** no end-user installer ISO. Integrating an installer means
+  building that half ourselves.
+- **Assessment:** a strong tool for **CI test VMs** and a **factory
+  preinstalled image** (D11). Not the consumer ISO.
 
-### D. debootstrap / live-build / mkosi from scratch, plus our own installer (e.g. Calamares)
+### D. debos (Collabora)
 
-- **Pros:** total control, and well-understood Debian tooling.
-- **Cons:** we lose the Ubuntu installer (TPM-FDE, autoinstall, subiquity's
-  storage handling), so we'd own an installer, boot-chain assembly and Secure
-  Boot plumbing. That's the largest ongoing cost of any option, for no
-  user-visible benefit in Milestone 1. **Rejected.**
+A YAML-recipe image builder, widely used for embedded and preinstalled images.
 
-### E. ubuntu-image (`classic`)
+- **Assessment:** similar role to mkosi. It's an alternative for preinstalled
+  images; mkosi is preferred for the systemd/UKI direction.
 
-Its image-definition YAML has an `iso` artefact type in the schema, but the
-documented examples produce disk images (`.img`). It's aimed at preinstalled
-and gadget-based images.
+### E. Remastering the official Debian Live ISO
 
-- **Assessment:** a possible future path for **preinstalled factory disk
-  images** for Linbox laptops. It's not a documented route to a desktop
-  installer ISO today. **Not selected** for Milestone 1; revisit for factory
-  imaging.
+- **Assessment:** unnecessary. Unlike Ubuntu's pipeline, Debian's own build
+  tool (A) is approachable, and remastering hides changes from the build
+  config. **Rejected.**
 
-### F. Autoinstall-only: stock Xubuntu ISO plus an autoinstall file that adds the Linbox repo and packages
+### F. Third-party remaster tools (penguins-eggs, refracta, Cubic-like GUIs)
 
-- **Pros:** no image modification at all.
-- **Cons:** needs network at install time, and there's no Linbox branding in
-  the live session or installer. It's not a distributable product image.
-- **Assessment:** not a distribution strategy, but **is** our factory
-  provisioning mechanism (see architecture §4).
+- **Assessment:** they snapshot a running system or are interactive, so
+  they're not reproducible from git. **Rejected.**
 
 ## Comparison
 
-| | Reproducible | Keeps stock installer | Maintenance | Canonical-documented | Speed |
+| | Reproducible | Live session + GUI installer | Unattended install | Maintenance | Used by Debian |
 |---|---|---|---|---|---|
-| **A. livefs-editor** | ✅ | ✅ (to be proven on desktop ISO) | Low | ✅ (customise) | Fast |
-| B. livecd-rootfs | ✅ | ✅ | High | ✅ (build) | Slow |
-| C. Cubic | ❌ | ✅ | Medium | ❌ | Medium |
-| D. From scratch | ✅ | ❌ | Very high | ❌ | Medium |
-| E. ubuntu-image | ✅ | n/a (no installer ISO) | Medium | ✅ (preinstalled) | Medium |
-| F. Autoinstall only | ✅ | ✅ | Low | ✅ | — |
+| **A. live-build + Calamares** | ✅ (+ snapshot.debian.org) | ✅ | ❌ | Low–medium | ✅ live ISOs |
+| B. d-i + preseed | ✅ | ❌ | ✅ | Medium | ✅ installer ISOs |
+| C. mkosi | ✅ | ❌ | n/a (image) | Low | — |
+| D. debos | ✅ | ❌ | n/a (image) | Low | — |
+| E. Remaster live ISO | ⚠️ | ✅ | ❌ | Medium | — |
+| F. Snapshot tools | ❌ | ✅ | ❌ | Medium | — |
 
 ## Recommendation
 
-Use **A (livefs-editor) as the primary approach**, gated by a Phase 2 spike
-with these exit criteria:
+Use **A (live-build + Calamares)** for the Linbox OS ISO. The **M1 spike** has
+these exit criteria:
 
-1. A remastered Xubuntu 26.04.1 Minimal ISO boots in UEFI mode with Secure
-   Boot on, in a VM.
-2. The installer installs a system that contains the Linbox packages.
-3. The installed system boots and `apt` resolves without errors.
+1. Builds in a Debian 13 container from `snapshot.debian.org` pinned inputs.
+2. Boots in UEFI mode with Secure Boot on (QEMU/OVMF) into a Wayland-only
+   live session.
+3. Calamares installs to disk. The installed system boots, contains the Linbox
+   test package, and `apt` resolves cleanly.
+4. Two builds of the same commit produce identical package manifests.
 
-If criterion 2 fails because of layering, switch to **B (livecd-rootfs,
-`PROJECT=xubuntu`)**. Because all customisation lives in packages (see
-architecture §1), the switch only changes `build/`. Separately, keep
-**F (autoinstall)** for factory installs and **E (ubuntu-image)** under
-review for preinstalled factory images.
+Use **mkosi** for CI test VMs. Decide between **d-i preseed** and a **mkosi
+preinstalled image** for factory provisioning in M4.
 
 ## Sources
 
-- [Image cookbook: create installer image](https://ubuntu.com/hardware/docs/image-cookbook/howto/images/create_installer_image/)
-- [Image cookbook: customise installer image](https://ubuntu.com/hardware/docs/image-cookbook/howto/images/customize_installer_image/)
-- [How Ubuntu is made: image builds](https://ubuntu.com/project/docs/how-ubuntu-is-made/processes/image-builds/)
-- [Discourse: How to create my own bootable image?](https://discourse.ubuntu.com/t/how-to-create-my-own-bootable-image/77158)
-- [ubuntu-image classic examples](https://canonical-subiquity.readthedocs-hosted.com/en/latest/howto/ubuntu-image-classic-examples.html)
-- [ubuntu-desktop-provision](https://github.com/canonical/ubuntu-desktop-provision)
-- [Xubuntu 26.04 release notes](https://xubuntu.org/releasedocs/26.04/release-notes/)
+- [The Debian Live Project](https://www.debian.org/devel/debian-live/)
+- [Debian live install images](https://www.debian.org/CD/live/)
+- [Debian live team (Salsa)](https://salsa.debian.org/live-team)
+- [Reproducible live images (Debian wiki)](https://wiki.debian.org/ReproducibleInstalls/LiveImages)
+- [What's new in Debian 13](https://www.debian.org/releases/stable/release-notes/whats-new.html)

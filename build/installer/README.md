@@ -1,3 +1,5 @@
 # Installer configuration sources
 
-Factory autoinstall files and installer white-label sources (`whitelabel.yaml`, slides) that are packaged into `linbox-installer-config`. Arrives in Milestone M2.
+Calamares settings, branding and slideshow, packaged into
+`linbox-installer-config` (M2). The factory-provisioning config (d-i preseed
+or a preinstalled image) arrives in M4, per decision D11.

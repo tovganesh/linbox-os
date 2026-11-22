@@ -80,7 +80,7 @@ image processor instead of a USB UVC webcam. Those need:
   stack, with a v4l2 loopback or PipeWire bridge so ordinary apps can use the
   camera
 
-How much of that works out of the box on Ubuntu 26.04's kernel is
+How much of that works out of the box on Debian 13's 6.12 kernel (or a backports kernel) is
 **unverified**. We mark it `untested` everywhere until a Linbox build is tested
 on each specific model. Test procedure (Phase 4):
 

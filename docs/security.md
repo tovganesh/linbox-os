@@ -8,7 +8,7 @@ Please don't open public issues for security problems.
 
 ## Rules for everything in this repository
 
-- **Upstream first.** Prefer Ubuntu archive packages. Each third-party
+- **Upstream first.** Prefer Debian archive packages. Each third-party
   repository needs an architecture decision and is never enabled in the base
   image.
 - **Verify every download** against a pinned checksum or a pinned signing
@@ -16,7 +16,7 @@ Please don't open public issues for security problems.
 - **Least privilege.** User-space toolchains install as the user. Privileged
   actions go through narrow polkit actions or explicit `sudo`, with the
   command shown first.
-- **The Secure Boot chain is untouched.** We use Ubuntu's signed shim, GRUB
+- **The Secure Boot chain is untouched.** We use Debian's signed shim, GRUB
   and kernel. We don't disable Secure Boot, and we avoid DKMS modules that
   need MOK enrollment.
 - **No telemetry without explicit opt-in.** Diagnostics bundles are created

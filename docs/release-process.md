@@ -7,11 +7,11 @@
 
 | Channel | APT suite | Who | Contents |
 |---|---|---|---|
-| testing | `resolute-testing` | Linbox team, early adopters | Every merged package change, after CI |
-| stable | `resolute` | All users, shipped laptops | Packages promoted unchanged from testing |
+| testing | `trixie-testing` | Linbox team, early adopters | Every merged package change, after CI |
+| stable | `trixie` | All users, shipped laptops | Packages promoted unchanged from testing |
 
-Ubuntu's own archive (`resolute`, `-updates`, `-security`) is never mirrored
-or filtered. Users get Ubuntu security updates directly from Ubuntu.
+Debian's own archive (`deb.debian.org`, `security.debian.org`) is never mirrored
+or filtered. Users get Debian security updates directly from Debian. Linbox suites are unrelated to Debian's own "testing" distribution.
 
 ## Package flow
 
@@ -29,7 +29,7 @@ or filtered. Users get Ubuntu security updates directly from Ubuntu.
 ## ISO releases
 
 1. Freeze: stable contains the intended package set.
-2. Build the ISO from a tagged commit (`release/26.04-previewN`). CI produces
+2. Build the ISO from a tagged commit (`release/1.0-previewN`). CI produces
    the ISO, SHA256SUMS, build-info and manifest.
 3. Release checklist (in a `tests/` doc):
    - UEFI + Secure Boot install in a VM

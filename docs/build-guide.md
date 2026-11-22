@@ -7,29 +7,35 @@
 
 ## Build environment (planned)
 
-- **Host:** Ubuntu 26.04 (`resolute`) amd64. This can be a VM, a privileged
-  container in CI, or WSL2. The build needs root for loop mounts and squashfs.
-- **Tools:** `livefs-editor` (pinned git revision), `squashfs-tools`,
-  `xorriso`, `gpg`, `devscripts`, `debhelper`, `sbuild` or `dpkg-buildpackage`.
-  The exact list will live in `build/requirements.txt` or `build/deps.list`.
+- **Host:** Debian 13 (trixie) amd64. This can be a privileged container in
+  CI, a VM, or WSL2. live-build needs root for chroot and mounts.
+- **Tools:** `live-build`, `debootstrap`, `squashfs-tools`, `xorriso`, `gpg`,
+  `devscripts`, `debhelper`, `reprepro`. The exact list will live in
+  `build/deps.list`.
 - **Disk:** about 20 GB free for `cache/`, `work/` and `out/`.
-- **Testing:** QEMU + OVMF (with the Secure Boot variables) for UEFI and
-  Secure Boot boot tests.
+- **Testing:** QEMU + OVMF (with the Secure Boot variables), and mkosi for
+  disposable test VMs.
 
 ## Flow (planned)
 
-1. **Fetch upstream.** Read `build/manifests/linbox-26.04.yaml`, download the
-   pinned Xubuntu ISO into `cache/`, verify `SHA256SUMS.gpg` against Ubuntu's
-   CD image signing key, then verify the ISO's SHA-256. The build aborts on
-   any mismatch.
+1. **Resolve inputs.** Read `build/manifests/linbox-1.yaml`. It gives the
+   Debian snapshot timestamp, the Linbox repo channel and version, and the
+   package lists for each edition.
 2. **Build packages.** Build every `packages/*` source package into
-   `out/debs/`. In CI the packages come from the Linbox repo (PPA) instead.
-3. **Remaster.** Run `livefs-edit cache/<upstream>.iso out/<linbox>.iso
-   --action-yaml build/image/actions.yaml`.
-4. **Emit metadata.** Write `out/SHA256SUMS`, `out/<iso>.build-info.json` and
-   `out/<iso>.manifest`.
-5. **Smoke test.** Boot in QEMU/OVMF, run an unattended install through
-   autoinstall, reboot, and run `linbox doctor --json`.
+   `out/debs/` and index them in a local repo. In CI the packages come from
+   the Linbox repo instead.
+3. **Configure.** Copy `build/live-build/` to `work/lb/`, then run `lb config`
+   with the mirrors set to
+   `snapshot.debian.org/archive/debian/<timestamp>` and the Linbox repo
+   added.
+4. **Build.** Run `lb build` in `work/lb/`, with `SOURCE_DATE_EPOCH` set from
+   the commit time.
+5. **Emit metadata.** Write `out/SHA256SUMS`, `out/<iso>.build-info.json` and
+   `out/<iso>.packages`.
+6. **Smoke test.** Boot in QEMU/OVMF with Secure Boot, then check:
+   - the live session reaches the Wayland desktop
+   - a scripted Calamares install succeeds
+   - after reboot, `linbox doctor --json` passes
 
 All writes go to `cache/`, `work/` and `out/` at the repo root, which are
 git-ignored. The build never modifies files under `build/`, `packages/` or

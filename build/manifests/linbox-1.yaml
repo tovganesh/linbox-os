@@ -1,0 +1,41 @@
+# Linbox OS 1 (Debian 13 "trixie") image manifest — the single source of truth for what an ISO is built from.
+# Status: proposed (Phase 1). Consumed by build scripts from Milestone M1.
+manifest: 1
+
+release:
+  name: Linbox OS
+  version: "1.0"
+  stage: dev                     # dev | preview | rc | stable
+  arch: amd64
+
+base:                            # decision D1
+  distribution: debian
+  suite: trixie
+  point_release: "13.7"
+  components: [main, non-free-firmware]
+  # Frozen archive view → reproducible package resolution. Bump deliberately.
+  # Verified 2026-11-22: dists/trixie/Release at this snapshot reports Version 13.7.
+  snapshot: "20261120T000000Z"
+  mirror: https://snapshot.debian.org/archive/debian/20261120T000000Z/
+  security_mirror: https://snapshot.debian.org/archive/debian-security/20261120T000000Z/
+
+display:                         # decision D2
+  server: wayland
+  xorg: false                    # no Xorg server, no X11 session
+  xwayland: true                 # proposed: X11-only apps keep working inside Wayland
+
+repositories:                    # decision D5 — filled in M2
+  linbox:
+    channel: testing             # testing | stable
+
+installer:                       # decision D4
+  type: calamares
+
+editions:
+  default:
+    desktop: undecided           # decision D3 — recommended: plasma (Wayland)
+    install:
+      - linbox-desktop           # meta-package; pulls linbox-base, branding, settings
+    live_only:
+      - linbox-installer-config  # Calamares config + branding, not copied to the target
+  # focus:                       # future Hyprland edition — reuses linbox-base

@@ -7,9 +7,9 @@ professionally refurbished business laptops.
 
 ## Direction (initial, pending architecture review)
 
-- Base: Ubuntu 26.04 LTS (amd64)
-- Desktop: XFCE on X11
-- Packages: APT, Ubuntu archive + a Linbox repository
+- Base: Debian 13 "trixie" (amd64), `main` + `non-free-firmware`
+- Display: Wayland only (no Xorg); desktop environment pending decision D3
+- Packages: APT, the Debian archive + a Linbox repository
 - Filesystem / boot: ext4, GRUB, systemd
 - Audience: developers and technical professionals
 
@@ -30,5 +30,5 @@ Linbox OS's own source — build scripts, packaging, configuration, tools and
 documentation in this repository — is licensed under the
 [Apache License 2.0](LICENSE).
 
-Ubuntu packages and other third-party software included in Linbox OS images
+Debian packages and other third-party software included in Linbox OS images
 keep their own upstream licences.
