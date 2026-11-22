@@ -1,0 +1,34 @@
+# Linbox OS 26.04 image manifest — the single source of truth for what an ISO is built from.
+# Status: proposed (Phase 1). Consumed by build scripts from Milestone M1.
+manifest: 1
+
+release:
+  name: Linbox OS
+  version: "26.04"
+  stage: dev                     # dev | preview | rc | stable
+  ubuntu_series: resolute
+  arch: amd64
+
+upstream:                        # decision D1
+  flavour: xubuntu
+  image: xubuntu-26.04.1-minimal-amd64.iso
+  url: https://cdimage.ubuntu.com/xubuntu/releases/26.04.1/release/xubuntu-26.04.1-minimal-amd64.iso
+  sha256: f057788b4597321fd13b8daa54fd4492de1b39a1c35372e7fa8d73f77dc109ff
+  # SHA256SUMS + SHA256SUMS.gpg next to the ISO; verify the GPG signature with Ubuntu's
+  # CD image signing key before trusting this value on bump.
+  checksums_url: https://cdimage.ubuntu.com/xubuntu/releases/26.04.1/release/SHA256SUMS
+  verified_on: 2026-11-22
+
+repositories:                    # decision D3 — placeholders until the PPA exists
+  linbox:
+    channel: testing             # testing | stable
+    # uri / signed_by filled in M2
+
+editions:
+  xfce:
+    install:
+      - linbox-desktop           # meta-package; pulls linbox-base, branding, settings
+    live_only:
+      - linbox-installer-config  # installer white-label, not copied to the target
+    remove: []                   # upstream packages to drop; each needs a reason comment
+  # focus:                       # future Hyprland edition — reuses linbox-base

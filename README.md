@@ -13,8 +13,16 @@ professionally refurbished business laptops.
 - Filesystem / boot: ext4, GRUB, systemd
 - Audience: developers and technical professionals
 
-See `docs/` (coming in Phase 1) for the architecture proposal, build guide and
-hardware compatibility strategy.
+## Documentation
+
+- [Architecture proposal](docs/architecture.md): design, packages, risks and
+  **decisions awaiting approval**
+- [Image-build options](docs/image-build-options.md): how the ISO is built,
+  and why
+- [Milestone plan](docs/roadmap.md)
+- [Hardware compatibility](docs/hardware-compatibility.md)
+- [Build guide](docs/build-guide.md) · [Release process](docs/release-process.md) · [Security](docs/security.md)
+- [Contributing](CONTRIBUTING.md)
 
 ## License
 

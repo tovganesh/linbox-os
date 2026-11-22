@@ -1,0 +1,185 @@
+# Infinix ZeroBook — Linbox OS primary development/validation machine.
+# Every component is `untested` until a Linbox build is tested on it (Phase 4).
+schema: 1
+vendor: Infinix
+model: ZeroBook
+dmi:
+  sys_vendor: null      # capture from /sys/class/dmi/id during Phase 4
+  product_name: null
+  product_sku: null
+  board_name: null
+role: development
+specs:
+  cpu: Intel Core i9-13900H
+  ram: 32 GB
+  storage: NVMe SSD
+components:
+  cpu:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  gpu_integrated:
+    status: untested
+    device: null
+    notes: "Intel Iris Xe (nominal)"
+    workaround: null
+    tests: []
+  gpu_discrete:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  wifi:
+    status: untested
+    device: null
+    notes: "Intel wireless (exact chipset to capture)"
+    workaround: null
+    tests: []
+  bluetooth:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  ethernet:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  webcam:
+    status: untested
+    device: null
+    notes: "Suspected Intel IPU6 MIPI camera, possibly OV02C10 sensor — unconfirmed"
+    workaround: null
+    tests: []
+  microphone:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  speakers:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  headphone_jack:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  display_internal:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  brightness:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  display_external_hdmi:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  display_external_usbc:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  touchpad:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  trackpoint:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  keyboard_hotkeys:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  keyboard_backlight:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  suspend_resume:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  hibernate:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  battery:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  charge_thresholds:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  fingerprint:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  card_reader:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  usb_c_dock:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  firmware_updates:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  secure_boot:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+  tpm:
+    status: untested
+    device: null
+    notes: null
+    workaround: null
+    tests: []
+known_limitations: []
