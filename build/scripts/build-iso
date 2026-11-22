@@ -15,6 +15,13 @@ MANIFEST=${MANIFEST:-$SRC/build/manifests/linbox-1.yaml}
 
 log() { printf '\n==> %s\n' "$*"; }
 
+# File modes from a Windows bind mount (Docker Desktop) are all 0755, so never trust
+# them: reset to 0644/0755 and mark executables explicitly.
+normalize_modes() {
+	find "$1" -type d -exec chmod 0755 {} +
+	find "$1" -type f -exec chmod 0644 {} +
+}
+
 [ "$(id -u)" -eq 0 ] || { echo "E: must run as root inside the build container" >&2; exit 1; }
 
 # --- 1. Read the manifest -----------------------------------------------------
@@ -72,7 +79,9 @@ rm -rf "$WORK/pkgs" && mkdir -p "$WORK/pkgs/debs"
 for dir in "$SRC"/packages/*/; do
 	[ -d "$dir/debian" ] || continue
 	name=$(basename "$dir")
-	cp -a "$dir" "$WORK/pkgs/$name"
+	cp -r "$dir" "$WORK/pkgs/$name"
+	normalize_modes "$WORK/pkgs/$name"
+	chmod 0755 "$WORK/pkgs/$name/debian/rules"
 	(cd "$WORK/pkgs/$name" && dpkg-buildpackage -b -us -uc)
 done
 mv "$WORK"/pkgs/*.deb "$WORK/pkgs/debs/"
@@ -111,7 +120,11 @@ lb config \
 # Snapshot Release files are expired by design; same tweak as Debian's own rebuild.sh.
 sed -i -e '/^APT_OPTIONS=/s/--yes/--yes -o Acquire::Check-Valid-Until=false -o Acquire::Retries=5/' config/common
 
-cp -a "$SRC/build/live-build/config/." config/
+rm -rf "$WORK/overlay" && cp -r "$SRC/build/live-build/config" "$WORK/overlay"
+normalize_modes "$WORK/overlay"
+find "$WORK/overlay/hooks" -type f -name '*.hook.*' -exec chmod 0755 {} +
+find "$WORK/overlay/includes.chroot/usr/lib/live/config" -type f -exec chmod 0755 {} +
+cp -r "$WORK/overlay/." config/
 mkdir -p config/packages.chroot
 cp "$WORK"/pkgs/debs/*.deb config/packages.chroot/
 # Debian's reproducibility hooks (shipped with live-build)

@@ -75,7 +75,7 @@ class Serial:
         with self.lock:
             return len(self.buf)
 
-    def run(self, cmd, timeout=60):
+    def run(self, cmd, timeout=120):
         """Run a shell command on the logged-in serial console; return (rc, output)."""
         tag = f"T{int(time.time() * 1000)}"
         pos = self.mark()
@@ -115,6 +115,8 @@ def main():
     ap.add_argument("--ovmf-vars", default=find_first([
         "/usr/share/OVMF/OVMF_VARS_4M.ms.fd", "/usr/share/OVMF/OVMF_VARS.ms.fd"]))
     ap.add_argument("--memory", default="6144")
+    ap.add_argument("--tcg", action="store_true",
+                    help="software emulation (no KVM); much slower, timeouts scaled x4")
     args = ap.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
@@ -129,8 +131,10 @@ def main():
         if os.path.exists(p):
             os.unlink(p)
 
+    slow = 4 if args.tcg else 1
+    accel = ["-accel", "tcg,thread=multi", "-cpu", "max"] if args.tcg else ["-enable-kvm", "-cpu", "host"]
     qemu = subprocess.Popen([
-        "qemu-system-x86_64", "-enable-kvm", "-cpu", "host", "-smp", "4", "-m", args.memory,
+        "qemu-system-x86_64", *accel, "-smp", "4", "-m", args.memory,
         "-machine", "q35,smm=on", "-global", "driver=cfi.pflash01,property=secure,value=on",
         "-drive", f"if=pflash,format=raw,unit=0,readonly=on,file={args.ovmf_code}",
         "-drive", f"if=pflash,format=raw,unit=1,file={vars_copy}",
@@ -151,17 +155,17 @@ def main():
         mon = Monitor(mon_sock)
 
         # Press Enter at the boot menu until the kernel starts printing.
-        for _ in range(24):
+        for _ in range(24 * slow):
             time.sleep(5)
             if ser.wait_for(r"Linux version", 0.1):
                 break
             mon.cmd("sendkey ret")
-        check("kernel boots", ser.wait_for(r"Linux version", 120))
+        check("kernel boots", ser.wait_for(r"Linux version", 120 * slow))
 
-        sb = ser.wait_for(r"[Ss]ecure boot (enabled|disabled)", 120)
+        sb = ser.wait_for(r"[Ss]ecure boot (enabled|disabled)", 120 * slow)
         check("secure boot enforced", sb and sb.group(1) == "enabled", sb.group(0) if sb else "no message")
 
-        login = ser.wait_for(r"\S+ login: ", 900)
+        login = ser.wait_for(r"\S+ login: ", 900 * slow)
         check("serial login prompt", login)
         if not login:
             raise RuntimeError("no login prompt")
@@ -183,11 +187,13 @@ def main():
 
         # Wait for SDDM autologin into the Plasma Wayland session.
         session = ""
-        for _ in range(36):
+        for _ in range(36 * slow):
             rc, out = ser.run(
                 "for s in $(loginctl list-sessions --no-legend | awk '{print $1}'); do "
                 "loginctl show-session $s -p Name -p Type -p Service -p Class | paste -sd' '; done")
-            if re.search(r"Name=user Type=wayland", out):
+            # One line per session; property order is systemd's, not the -p order.
+            if any("Name=user" in ln and "Service=sddm-autologin" in ln and "Type=wayland" in ln
+                   for ln in out.splitlines()):
                 session = out
                 break
             time.sleep(5)
@@ -204,6 +210,9 @@ def main():
         rc, out = ser.run("systemctl --failed --no-legend --plain || true")
         results["info"]["failed_units"] = out
 
+        # Wake the display in case power management blanked it, then capture.
+        mon.cmd("mouse_move 20 20")
+        mon.cmd("sendkey shift")
         time.sleep(5)
         mon.cmd(f"screendump {os.path.join(args.outdir, 'screen.png')} -f png")
         time.sleep(2)
