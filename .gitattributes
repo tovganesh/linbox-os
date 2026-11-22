@@ -1,0 +1,5 @@
+# Linux distribution sources: always LF, even when edited on Windows
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.svg text eol=lf

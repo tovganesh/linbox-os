@@ -1,0 +1,23 @@
+# Build artifacts are always generated outside source configuration directories
+/out/
+/work/
+/cache/
+*.iso
+*.iso.sha256
+*.img
+*.qcow2
+*.deb
+*.changes
+*.buildinfo
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local secrets — never commit
+.env
+*.key
+*.pem
