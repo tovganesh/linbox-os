@@ -1,0 +1,104 @@
+#!/bin/bash
+# End-to-end test of the Linbox APT repository tooling, with a throwaway key.
+# Runs as root in a throwaway debian:trixie container (CI, or locally):
+#
+#   docker run --rm -v "$PWD:/src:ro" debian:trixie bash /src/tests/apt/test-repo
+#
+# It works on a copy of the source tree whose packages/linbox-keyring/keys/ holds
+# only a freshly generated test key, and drives build/scripts/ci-apt exactly as CI
+# does (signing subkey passed in like the GitHub secret). It checks that:
+#   1. every package builds, and the result is a signed, verifiable repository
+#      with an empty stable channel
+#   2. rebuilding unchanged sources gives identical .debs, and republishing is a no-op
+#   3. changed content under an unchanged version is rejected
+#   4. a Debian 13 system with linbox-keyring + linbox-repository installed can
+#      apt update cleanly and install a package from the repository
+#   5. promotion copies the tested version to stable, and refuses anything else
+set -euo pipefail
+
+SRC=$(cd "$(dirname "$0")/../.." && pwd -P)
+T=$(mktemp -d)
+pass() { echo "[PASS] $*"; }
+fail() { echo "[FAIL] $*" >&2; exit 1; }
+
+"$SRC/build/scripts/setup-build-env" reprepro gnupg gpgv python3
+
+echo "==> Source copy with a throwaway archive key"
+cp -r "$SRC" "$T/src"
+rm -rf "$T/src/out" "$T/src/.git"
+rm -f "$T/src/packages/linbox-keyring/keys/"*.asc
+export GNUPGHOME=$T/gnupg
+mkdir -m 700 "$GNUPGHOME"
+PASS=test-passphrase
+gpg --batch --quiet --pinentry-mode loopback --passphrase "$PASS" \
+	--quick-generate-key "Linbox TEST key - not for production <test@invalid>" ed25519 cert 1d
+FPR=$(gpg --batch --with-colons --list-keys | awk -F: '/^fpr:/ {print $10; exit}')
+gpg --batch --quiet --pinentry-mode loopback --passphrase "$PASS" --quick-add-key "$FPR" ed25519 sign 1d
+gpg --batch --armor --export "$FPR" > "$T/src/packages/linbox-keyring/keys/linbox-archive-test.asc"
+# What tools/make-archive-key hands to CI: the secret signing subkey only.
+LINBOX_APT_SIGNING_KEY=$(gpg --batch --pinentry-mode loopback --passphrase "$PASS" --armor --export-secret-subkeys "$FPR")
+export LINBOX_APT_SIGNING_KEY LINBOX_APT_SIGNING_PASSPHRASE=$PASS SITE_CNAME=apt.test.invalid WORK=$T
+CI=$T/src/build/scripts/ci-apt
+
+echo "==> 1. Build and publish"
+"$CI" publish
+for f in dists/trixie-testing/InRelease dists/trixie-testing/Release.gpg \
+	dists/trixie/InRelease linbox-archive-keyring.asc CNAME index.html; do
+	[ -s "$T/site/$f" ] || fail "site is missing $f"
+done
+grep -q '^Package: linbox-repository$' "$T/site/dists/trixie-testing/main/binary-amd64/Packages" ||
+	fail "linbox-repository not in the trixie-testing index"
+if grep -q '^Package:' "$T/site/dists/trixie/main/binary-amd64/Packages"; then
+	fail "stable channel (trixie) must stay empty: packages reach it only by promotion"
+fi
+pass "repository built, signed and verified"
+
+echo "==> 2. Rebuild and republish unchanged packages"
+# CI rebuilds every package on each merge, so unchanged sources must give identical .debs.
+cp -r "$T/debs" "$T/debs-first"
+"$CI" publish
+for deb in "$T"/debs-first/*.deb; do
+	cmp -s "$deb" "$T/debs/$(basename "$deb")" || fail "$(basename "$deb") is not reproducible"
+done
+pass "rebuilds are bit-identical and republishing them is a no-op"
+
+echo "==> 3. Changed content, same version"
+# Separate scratch dir so the good .debs and site from step 1 stay intact.
+mkdir -p "$T/w3" && cp -r "$T/state" "$T/w3/state"
+cp "$T/src/packages/linbox-repository/sources/linbox.sources" "$T/linbox.sources.orig"
+echo "# changed" >> "$T/src/packages/linbox-repository/sources/linbox.sources"
+if WORK=$T/w3 "$CI" publish; then
+	fail "publish-apt accepted different content under an unchanged version"
+fi
+cp "$T/linbox.sources.orig" "$T/src/packages/linbox-repository/sources/linbox.sources"
+pass "changed content without a version bump is rejected"
+
+echo "==> 4. apt on a Debian 13 system"
+cd "$T/site" && python3 -m http.server 8765 --bind 127.0.0.1 >/dev/null 2>&1 &
+HTTP=$!
+trap 'kill $HTTP 2>/dev/null || true' EXIT
+dpkg -i "$T"/debs/linbox-keyring_*.deb "$T"/debs/linbox-repository_*.deb
+sed -i 's|^URIs: .*|URIs: http://127.0.0.1:8765/|' /etc/apt/sources.list.d/linbox.sources
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+	python3 -c 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8765/")' 2>/dev/null && break
+	sleep 1
+done
+apt-get update -q 2>&1 | tee "$T/apt-update.log"
+if grep -qE '^(W|E):' "$T/apt-update.log"; then fail "apt update reported warnings or errors"; fi
+apt-cache policy linbox-spike | tee "$T/policy"
+grep -q '127.0.0.1:8765 trixie-testing/main' "$T/policy" || fail "linbox-spike not offered by the Linbox repository"
+DEBIAN_FRONTEND=noninteractive apt-get install -y -q linbox-spike
+[ -f /usr/share/linbox/marker ] || fail "linbox-spike did not install"
+pass "apt update is clean and packages install from the repository"
+
+echo "==> 5. Promotion to stable"
+"$CI" promote linbox-spike 0.1.0
+grep -q '^Package: linbox-spike$' "$T/site/dists/trixie/main/binary-amd64/Packages" ||
+	fail "linbox-spike not in the stable index after promotion"
+grep -q '^Filename: pool/main/l/linbox-spike/linbox-spike_0.1.0_all.deb$' "$T/site/dists/trixie/main/binary-amd64/Packages" ||
+	fail "stable does not reference the same pool file as testing"
+if "$CI" promote linbox-spike 0.1.0; then fail "promoting the same version twice was accepted"; fi
+if "$CI" promote linbox-keyring 9.9.9; then fail "promoting a version not in testing was accepted"; fi
+pass "promotion copies the tested .deb to stable and refuses anything else"
+
+echo "RESULT: pass"

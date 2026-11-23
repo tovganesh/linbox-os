@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+
+KEYRING := debian/linbox-keyring/usr/share/keyrings/linbox-archive-keyring.asc
+
+%:
+	dh $@
+
+# All keys in keys/*.asc go into one armored keyring. A key is only ever added
+# here by tools/make-archive-key (see docs/apt-repository.md).
+override_dh_auto_install:
+	test -n "$(wildcard keys/*.asc)" || { echo "E: no keys in keys/; run tools/make-archive-key" >&2; exit 1; }
+	install -d $(dir $(KEYRING))
+	cat keys/*.asc > $(KEYRING)
+	chmod 0644 $(KEYRING)

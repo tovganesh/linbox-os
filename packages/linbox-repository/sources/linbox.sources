@@ -1,0 +1,7 @@
+# Linbox OS repository. Managed by the linbox-repository package; your edits
+# are kept on upgrade. Channels: trixie (stable), trixie-testing.
+Types: deb
+URIs: https://apt.linbox.in/
+Suites: trixie-testing
+Components: main
+Signed-By: /usr/share/keyrings/linbox-archive-keyring.asc

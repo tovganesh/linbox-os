@@ -1,0 +1,40 @@
+#!/bin/bash
+# Prepare a Debian 13 build container: pin its apt to the manifest's snapshot and
+# install the build tools. Runs as root inside a throwaway debian:trixie container.
+#
+#   setup-build-env [EXTRA_PACKAGE...]
+#
+#   MANIFEST   default: <repo>/build/manifests/linbox-1.yaml
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/../.." && pwd -P)
+MANIFEST=${MANIFEST:-$ROOT/build/manifests/linbox-1.yaml}
+
+[ "$(id -u)" -eq 0 ] || { echo "E: must run as root inside a build container" >&2; exit 1; }
+grep -q '^VERSION_CODENAME=trixie$' /etc/os-release ||
+	{ echo "E: not a Debian 13 (trixie) container" >&2; exit 1; }
+
+SNAPSHOT=$(sed -n 's/^  snapshot: "\(.*\)"$/\1/p' "$MANIFEST")
+[ -n "$SNAPSHOT" ] || { echo "E: no base.snapshot in $MANIFEST" >&2; exit 1; }
+
+echo "==> Pinning container apt to snapshot $SNAPSHOT"
+rm -f /etc/apt/sources.list.d/debian.sources
+cat > /etc/apt/sources.list.d/snapshot.sources <<SRC
+Types: deb
+URIs: http://snapshot.debian.org/archive/debian/$SNAPSHOT
+Suites: trixie trixie-updates
+Components: main
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+Check-Valid-Until: no
+
+Types: deb
+URIs: http://snapshot.debian.org/archive/debian-security/$SNAPSHOT
+Suites: trixie-security
+Components: main
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+Check-Valid-Until: no
+SRC
+export DEBIAN_FRONTEND=noninteractive
+apt-get -o Acquire::Retries=5 update -q
+apt-get -o Acquire::Retries=5 install -y -q --no-install-recommends \
+	python3 python3-yaml build-essential dpkg-dev debhelper fakeroot ca-certificates "$@"

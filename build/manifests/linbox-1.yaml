@@ -24,9 +24,13 @@ display:                         # decision D2
   xorg: false                    # no Xorg server, no X11 session
   xwayland: true                 # proposed: X11-only apps keep working inside Wayland
 
-repositories:                    # decision D5 — filled in M2
+repositories:                    # decision D5
   linbox:
-    channel: testing             # testing | stable
+    url: https://apt.linbox.in/  # GitHub Pages, published by .github/workflows/apt.yml
+    channel: testing             # testing (suite trixie-testing) | stable (suite trixie)
+
+packages:                        # Linbox packages from packages/ built into this image
+  - linbox-spike                 # M1 marker; replaced by linbox-desktop later in M2
 
 installer:                       # decision D4
   type: calamares

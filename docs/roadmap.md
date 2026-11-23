@@ -4,7 +4,7 @@ Each milestone ends in a **buildable, tested state**. Exit criteria are
 checked by a person and recorded in the PR that closes the milestone. Decision
 IDs (D1…) and risk IDs (R1…) refer to [architecture.md](architecture.md).
 
-## M0 — Architecture and foundation (Phase 1) ← *this PR*
+## M0 — Architecture and foundation (Phase 1) — done
 
 - Architecture proposal, image-build comparison, hardware strategy, release
   and security policy, repo skeleton, image manifest pinned to a Debian
@@ -12,7 +12,7 @@ IDs (D1…) and risk IDs (R1…) refer to [architecture.md](architecture.md).
 - **Exit:** D4–D13 approved or amended. D1 (Debian 13), D2 (Wayland only)
   and D3 (KDE Plasma 6) are already decided.
 
-## M1 — Build spike (Phase 2a)
+## M1 — Build spike (Phase 2a) — done, except the manual Calamares install check
 
 - Linux build environment: a privileged Debian 13 container in CI, plus a
   local VM or WSL2 (R6).
@@ -29,14 +29,15 @@ IDs (D1…) and risk IDs (R1…) refer to [architecture.md](architecture.md).
   - the installed system contains the test package
   - two builds produce identical package manifests
 
-## M2 — First bootable Linbox ISO (Phase 2b)
+## M2 — First bootable Linbox ISO (Phase 2b) — in progress
 
 - Packages: `linbox-keyring`, `linbox-repository`, `linbox-base`,
   `linbox-branding` (first pass), `linbox-desktop-settings` (first pass),
   `linbox-desktop`, `linbox-installer-config`.
 - `linbox-system` with `linbox version` and a read-only `linbox doctor`
   (repo health, disk, memory, failed units, network).
-- A Linbox APT repo (D5) with the `trixie-testing` channel.
+- A Linbox APT repo (D5) with the `trixie-testing` channel: reprepro in CI,
+  GitHub Pages at `apt.linbox.in` ([apt-repository.md](apt-repository.md)).
 - The ISO ships with build-info, SHA256SUMS and a package manifest.
 - **Exit:** installs in a VM (UEFI and Secure Boot), boots to a branded
   Wayland session with no Xorg installed, `apt update && apt full-upgrade` is

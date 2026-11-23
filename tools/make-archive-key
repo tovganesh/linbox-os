@@ -1,0 +1,103 @@
+#!/bin/bash
+# Create the Linbox APT archive signing key. Run this ONCE, by the maintainer, on a
+# trusted machine. Nothing secret is written inside the git checkout.
+#
+#   tools/make-archive-key OUTDIR
+#
+# OUTDIR should be offline storage (an encrypted USB stick, a password manager
+# export folder). It receives:
+#   linbox-archive-<year>-primary-secret.asc   primary + subkey, passphrase-protected.
+#                                              Keep offline. Needed to extend/rotate keys.
+#   linbox-archive-<year>-signing-subkey.asc   signing subkey only, for the CI secret.
+#                                              Delete after uploading it to GitHub.
+#   linbox-archive-<year>-revocation.asc       revocation certificate. Keep offline.
+#   README.txt                                 fingerprint and next steps.
+#
+# The PUBLIC key is written to packages/linbox-keyring/keys/ in this checkout.
+#
+# Key layout: ed25519 primary, certify-only, expires in 5 years; ed25519 signing
+# subkey, expires in 2 years. See docs/apt-repository.md for rotation.
+set -euo pipefail
+umask 077   # secret files: owner-only
+
+YEAR=$(date -u +%Y)
+UID_STR="Linbox OS Archive Signing Key ($YEAR) <os@linbox.in>"
+ROOT=$(cd "$(dirname "$0")/.." && pwd -P)
+PUBDIR=${LINBOX_KEY_PUBDIR:-$ROOT/packages/linbox-keyring/keys}  # override only for tests
+PUBFILE=$PUBDIR/linbox-archive-$YEAR.asc
+
+die() { echo "E: $*" >&2; exit 1; }
+
+[ $# -eq 1 ] || die "usage: $0 OUTDIR   (offline storage, outside this repository)"
+command -v gpg >/dev/null || die "gpg not found (Git for Windows ships it; on Debian: apt install gnupg)"
+OUTDIR=$1
+mkdir -p "$OUTDIR"
+OUTDIR=$(cd "$OUTDIR" && pwd -P)
+case "$OUTDIR/" in
+	"$ROOT"/*) die "OUTDIR is inside the git checkout; choose offline storage outside $ROOT" ;;
+esac
+for f in "$OUTDIR"/linbox-archive-"$YEAR"-*.asc "$PUBFILE"; do
+	[ -e "$f" ] && die "$f already exists; refusing to overwrite an existing key"
+done
+
+GNUPGHOME=$(mktemp -d)
+export GNUPGHOME
+chmod 700 "$GNUPGHOME"
+cleanup() {
+	gpgconf --kill gpg-agent >/dev/null 2>&1 || true
+	rm -rf "$GNUPGHOME"
+}
+trap cleanup EXIT
+
+printf 'Passphrase for the new key (min. 12 characters): '
+read -rs PASS; echo
+printf 'Repeat passphrase: '
+read -rs PASS2; echo
+[ "$PASS" = "$PASS2" ] || die "passphrases differ"
+[ ${#PASS} -ge 12 ] || die "passphrase too short"
+unset PASS2
+
+g() { printf '%s' "$PASS" | gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 0 "$@"; }
+
+echo "Generating key: $UID_STR"
+g --quick-generate-key "$UID_STR" ed25519 cert 5y
+FPR=$(gpg --batch --with-colons --list-keys "$UID_STR" | awk -F: '/^fpr:/ {print $10; exit}')
+[ -n "$FPR" ] || die "key generation failed"
+g --quick-add-key "$FPR" ed25519 sign 2y
+
+mkdir -p "$PUBDIR"
+gpg --batch --armor --export "$FPR" > "$PUBFILE"
+g --armor --export-secret-keys "$FPR" > "$OUTDIR/linbox-archive-$YEAR-primary-secret.asc"
+g --armor --export-secret-subkeys "$FPR" > "$OUTDIR/linbox-archive-$YEAR-signing-subkey.asc"
+cp "$GNUPGHOME/openpgp-revocs.d/$FPR.rev" "$OUTDIR/linbox-archive-$YEAR-revocation.asc"
+unset PASS
+
+cat > "$OUTDIR/README.txt" <<EOF
+Linbox OS APT archive signing key
+Created: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+UID:     $UID_STR
+Primary: $FPR (certify only, expires in 5 years)
+
+linbox-archive-$YEAR-primary-secret.asc   keep offline; needed to extend or rotate keys
+linbox-archive-$YEAR-revocation.asc       keep offline; publish only if the key is compromised
+linbox-archive-$YEAR-signing-subkey.asc   upload to GitHub, then delete this file
+
+The passphrase protects all secret files. Store it in your password manager.
+EOF
+
+gpg --batch --list-keys --keyid-format long "$FPR"
+cat <<EOF
+
+Done. Primary key fingerprint:
+  $FPR
+
+Public key written to:
+  $PUBFILE
+Commit that file (it is public).
+
+Next, upload the CI signing secrets (as the tovganesh account):
+  gh secret set LINBOX_APT_SIGNING_KEY --repo tovganesh/linbox-os < "$OUTDIR/linbox-archive-$YEAR-signing-subkey.asc"
+  gh secret set LINBOX_APT_SIGNING_PASSPHRASE --repo tovganesh/linbox-os
+(the second command prompts for the passphrase). Then delete:
+  $OUTDIR/linbox-archive-$YEAR-signing-subkey.asc
+EOF

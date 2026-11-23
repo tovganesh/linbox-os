@@ -1,0 +1,18 @@
+Source: linbox-keyring
+Section: misc
+Priority: optional
+Maintainer: Linbox OS Developers <os@linbox.in>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Homepage: https://github.com/tovganesh/linbox-os
+Rules-Requires-Root: no
+
+Package: linbox-keyring
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}
+Description: Linbox OS archive signing keys
+ OpenPGP public keys that sign the Linbox OS APT repository
+ (https://apt.linbox.in). APT uses them through the Signed-By field in
+ /etc/apt/sources.list.d/linbox.sources, so they are trusted for the Linbox
+ repository only, never for other repositories.

@@ -26,10 +26,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: shellcheck
+        # Every shell script in the tree (found by shebang), so new ones can't be missed.
         run: |
-          shellcheck -x build/scripts/build-iso build/scripts/build-in-docker \
-            build/live-build/config/hooks/normal/*.hook.chroot \
-            build/live-build/config/includes.chroot/usr/lib/live/config/*
+          git ls-files -z build packages tests tools |
+            xargs -0 grep -lE '^#!/bin/(ba)?sh' |
+            tee /dev/stderr | xargs shellcheck -x
       - name: python syntax
         run: python3 -m py_compile tests/vm/boot-test.py tools/dep-closure.py
 
