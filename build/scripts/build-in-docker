@@ -1,0 +1,23 @@
+#!/bin/bash
+# Run build-iso in a privileged Debian 13 container. Works on Linux and on
+# Docker Desktop (Windows/macOS). The chroot lives in a Docker volume, never in
+# the source tree; only final artefacts are copied to ./out.
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+IMAGE=${BUILD_IMAGE:-debian:trixie}
+VOLUME=${BUILD_VOLUME:-linbox-os-work}
+
+docker volume create "$VOLUME" >/dev/null
+mkdir -p "$ROOT/out"
+
+# MSYS_NO_PATHCONV stops Git-for-Windows from mangling the container paths.
+MSYS_NO_PATHCONV=1 docker run --rm --privileged \
+	-v "$ROOT:/src:ro" \
+	-v "$VOLUME:/work" \
+	-v "$ROOT/out:/out" \
+	-e OUT=/out \
+	-e BUILD_ID="${BUILD_ID:-}" \
+	-e GIT_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)" \
+	"$IMAGE" \
+	bash /src/build/scripts/build-iso

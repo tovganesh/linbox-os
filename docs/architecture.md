@@ -238,6 +238,7 @@ manifest.
 | R7 | **Intel IPU6 / OV02C10 webcams** may not work on Debian stable out of the box. | Hardware DB marks them `untested` until proven. No support claim without a tested report. |
 | R8 | **Changing `/etc/os-release` `ID`** breaks third-party install docs that use `$ID`/`$VERSION_CODENAME` (e.g. Docker's repo URL). | D7. Developer Setup maps Linbox → Debian when adding vendor repos. |
 | R9 | **Trademarks.** Debian's policy allows "based on Debian", but the Debian logo and the KDE/Xfce marks need care. | D12: review before the first public ISO. |
+| R10 | *(Found in M1.)* **Debian's `sddm` package Depends on `xserver-xorg \| xserver`**, even though its greeter runs on Wayland. | M1 satisfies the dependency with `xserver-xephyr`. It's a small nested X server that is installed but never started, and there is no Xorg server or X11 session. The build hook fails if Xorg appears. Alternatives if zero X server binaries are required: greetd with a Wayland greeter, or a Linbox-patched `sddm`. Revisit when Debian relaxes the dependency or Plasma's new login manager reaches Debian. |
 
 *Removed from revision 1:* the Ubuntu "universe" security-coverage risk.
 Debian's security team covers the whole `main` archive, including the desktop.

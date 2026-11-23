@@ -1,0 +1,16 @@
+Source: linbox-spike
+Section: misc
+Priority: optional
+Maintainer: Linbox OS Developers <os@linbox.in>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Homepage: https://github.com/tovganesh/linbox-os
+Rules-Requires-Root: no
+
+Package: linbox-spike
+Architecture: all
+Depends: ${misc:Depends}
+Description: Linbox OS build-spike marker (M1 only)
+ Trivial package used by Milestone M1 to prove that a locally built Linbox
+ package reaches both the live image and a system installed from it.
+ It will be removed once the real linbox-* packages exist (M2).
