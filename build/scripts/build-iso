@@ -90,7 +90,10 @@ ls -l "$WORK/pkgs/debs"
 # --- 3. Configure live-build --------------------------------------------------
 log "Configuring live-build"
 LB=$WORK/lb
-if [ -d "$LB" ]; then (cd "$LB" && lb clean --purge >/dev/null 2>&1 || true); fi
+if [ -d "$LB" ]; then
+	# Best effort: a half-finished previous build may leave mounts behind.
+	(cd "$LB" && { lb clean --purge >/dev/null 2>&1 || true; })
+fi
 rm -rf "$LB" && mkdir -p "$LB"
 cd "$LB"
 
