@@ -1,0 +1,130 @@
+name: APT
+
+# Linbox APT repository (decision D5, docs/apt-repository.md).
+#   pull_request: end-to-end test of the repository tooling with a throwaway key.
+#   push to main: build every package, add new versions to trixie-testing, sign with
+#                 the archive signing subkey, deploy to GitHub Pages (apt.linbox.in).
+#   manual run:   promote one package version from trixie-testing to trixie.
+# Reprepro state lives on the apt-repo branch; only this workflow writes to it.
+
+on:
+  pull_request:
+    paths:
+      - "packages/**"
+      - "build/apt/**"
+      - "build/scripts/**"
+      - "tests/apt/**"
+      - ".github/workflows/apt.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/**"
+      - "build/apt/**"
+      - "build/scripts/setup-build-env"
+      - "build/scripts/build-packages"
+      - "build/scripts/publish-apt"
+      - "build/scripts/promote-apt"
+      - "build/scripts/ci-apt"
+      - ".github/workflows/apt.yml"
+  workflow_dispatch:
+    inputs:
+      promote_package:
+        description: "Promote to stable (trixie): package name. Leave empty to just republish."
+        required: false
+      promote_version:
+        description: "Exact version currently in trixie-testing"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Repository tooling end-to-end test (throwaway key)
+        run: docker run --rm -v "$PWD:/src:ro" debian:trixie bash /src/tests/apt/test-repo
+
+  publish:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    # One publisher at a time; never cancel a run that may be pushing state.
+    concurrency:
+      group: apt-publish
+      cancel-in-progress: false
+    permissions:
+      contents: write   # push the apt-repo state branch
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out repository state (apt-repo branch)
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          url="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          mkdir -p "$RUNNER_TEMP/apt"
+          if git ls-remote --exit-code --heads "$url" apt-repo >/dev/null; then
+            git clone --quiet --branch apt-repo --single-branch "$url" "$RUNNER_TEMP/apt/state"
+          else
+            echo "No apt-repo branch yet: starting an empty repository"
+            git init --quiet -b apt-repo "$RUNNER_TEMP/apt/state"
+            git -C "$RUNNER_TEMP/apt/state" remote add origin "$url"
+          fi
+
+      - name: Build, add, sign
+        env:
+          LINBOX_APT_SIGNING_KEY: ${{ secrets.LINBOX_APT_SIGNING_KEY }}
+          LINBOX_APT_SIGNING_PASSPHRASE: ${{ secrets.LINBOX_APT_SIGNING_PASSPHRASE }}
+          PROMOTE_PACKAGE: ${{ inputs.promote_package }}
+          PROMOTE_VERSION: ${{ inputs.promote_version }}
+        run: |
+          if [ -n "$PROMOTE_PACKAGE" ]; then
+            set -- promote "$PROMOTE_PACKAGE" "$PROMOTE_VERSION"
+          else
+            set -- publish
+          fi
+          docker run --rm \
+            -v "$PWD:/src:ro" -v "$RUNNER_TEMP/apt:/work" \
+            -e LINBOX_APT_SIGNING_KEY -e LINBOX_APT_SIGNING_PASSPHRASE \
+            debian:trixie bash /src/build/scripts/ci-apt "$@"
+          sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/apt"
+
+      - name: Save repository state
+        env:
+          PROMOTE_PACKAGE: ${{ inputs.promote_package }}
+          PROMOTE_VERSION: ${{ inputs.promote_version }}
+        run: |
+          cd "$RUNNER_TEMP/apt/state"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "State unchanged"
+          else
+            if [ -n "$PROMOTE_PACKAGE" ]; then
+              msg="promote $PROMOTE_PACKAGE $PROMOTE_VERSION to trixie"
+            else
+              msg="publish to trixie-testing"
+            fi
+            git commit --quiet -m "apt: $msg (from ${GITHUB_SHA::12})"
+            git push --quiet origin apt-repo
+          fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/apt/site
+
+  deploy:
+    needs: publish
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

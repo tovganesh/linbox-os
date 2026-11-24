@@ -1,0 +1,4 @@
+verbose
+# Never delete a published .deb from the pool, even after a newer version
+# replaces it in the index (docs/release-process.md: no deletions).
+keepunreferencedfiles

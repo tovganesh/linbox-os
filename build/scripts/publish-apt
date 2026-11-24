@@ -1,0 +1,108 @@
+#!/bin/bash
+# Add .debs to the Linbox APT repository, sign it, and assemble the public site.
+#
+#   publish-apt STATE_DIR SITE_DIR SUITE [DEB...]   (no DEBs: re-sign and rebuild the site)
+#
+#   STATE_DIR  reprepro base dir (conf/ db/ dists/ pool/), kept on the apt-repo branch.
+#              Created from build/apt/conf/ if empty.
+#   SITE_DIR   output: the tree served at https://apt.linbox.in/ (replaced).
+#   SUITE      trixie-testing (every merge) or trixie (promotion only).
+#
+# Environment:
+#   SIGNING_KEY         fingerprint of the signing (sub)key in the current GNUPGHOME
+#   SIGNING_PASSPHRASE  its passphrase (may be empty for an unprotected test key)
+#   VERIFY_KEYS         public key files to verify the result with
+#                       (default: packages/linbox-keyring/keys/*.asc)
+#   SITE_CNAME          custom domain written to SITE_DIR/CNAME (default apt.linbox.in)
+#
+# Publishing the same package version twice with identical content is a no-op;
+# with different content it fails (bump the version in debian/changelog).
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/../.." && pwd -P)
+die() { echo "E: $*" >&2; exit 1; }
+
+[ $# -ge 3 ] || die "usage: $0 STATE_DIR SITE_DIR SUITE [DEB...]"
+STATE=$1 SITE=$2 SUITE=$3
+shift 3
+: "${SIGNING_KEY:?set SIGNING_KEY to the signing key fingerprint}"
+SIGNING_PASSPHRASE=${SIGNING_PASSPHRASE-}
+SITE_CNAME=${SITE_CNAME:-apt.linbox.in}
+for cmd in reprepro gpg gpgv; do command -v "$cmd" >/dev/null || die "$cmd not installed"; done
+case "$SUITE" in trixie | trixie-testing) ;; *) die "unknown suite $SUITE" ;; esac
+
+# --- 1. Repository state ------------------------------------------------------
+mkdir -p "$STATE"
+if [ ! -d "$STATE/conf" ]; then
+	echo "==> New repository in $STATE"
+	cp -r "$ROOT/build/apt/conf" "$STATE/conf"
+else
+	# Configuration always comes from git, not from the state branch.
+	cp "$ROOT"/build/apt/conf/* "$STATE/conf/"
+fi
+
+# --- 2. Add packages ----------------------------------------------------------
+for deb in "$@"; do
+	name=$(basename "$deb")
+	# reprepro skips a version it already has without comparing content, so check
+	# here: same file name in the pool must mean the same bytes.
+	existing=
+	if [ -d "$STATE/pool" ]; then
+		existing=$(find "$STATE/pool" -type f -name "$name" -print -quit)
+	fi
+	if [ -n "$existing" ]; then
+		if cmp -s "$existing" "$deb"; then
+			echo "==> $name already published, unchanged"
+		else
+			die "$name is already published with different content; bump its version in debian/changelog"
+		fi
+	fi
+	echo "==> $SUITE <- $name"
+	reprepro -b "$STATE" includedeb "$SUITE" "$deb"
+done
+reprepro -b "$STATE" export
+reprepro -b "$STATE" list "$SUITE"
+
+# --- 3. Sign every Release file -----------------------------------------------
+sign() {
+	printf '%s' "$SIGNING_PASSPHRASE" |
+		gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-fd 0 \
+			--local-user "$SIGNING_KEY!" --digest-algo SHA512 "$@"
+}
+VERIFY=$(mktemp)
+trap 'rm -f "$VERIFY"' EXIT
+if [ -n "${VERIFY_KEYS:-}" ]; then
+	# shellcheck disable=SC2086 # list of files
+	cat $VERIFY_KEYS | gpg --batch --quiet --dearmor > "$VERIFY"
+else
+	cat "$ROOT"/packages/linbox-keyring/keys/*.asc | gpg --batch --quiet --dearmor > "$VERIFY"
+fi
+for rel in "$STATE"/dists/*/Release; do
+	d=$(dirname "$rel")
+	sign --clearsign --output "$d/InRelease" "$rel"
+	sign --detach-sign --armor --output "$d/Release.gpg" "$rel"
+	# Fails if CI signed with a key that the linbox-keyring package does not ship.
+	gpgv --quiet --keyring "$VERIFY" "$d/InRelease"
+	gpgv --quiet --keyring "$VERIFY" "$d/Release.gpg" "$rel"
+	echo "==> signed and verified $(basename "$d")"
+done
+
+# --- 4. Public site -----------------------------------------------------------
+rm -rf "$SITE"
+mkdir -p "$SITE"
+cp -r "$STATE/dists" "$STATE/pool" "$SITE/"
+cat "$ROOT"/packages/linbox-keyring/keys/*.asc > "$SITE/linbox-archive-keyring.asc"
+echo "$SITE_CNAME" > "$SITE/CNAME"
+cat > "$SITE/index.html" <<'EOF'
+<!doctype html>
+<meta charset="utf-8">
+<title>Linbox OS APT repository</title>
+<h1>Linbox OS APT repository</h1>
+<p>This is the package repository for Linbox OS. Linbox systems use it through
+the <code>linbox-repository</code> package. It holds only Linbox's own
+packages; Debian packages come from Debian.</p>
+<p>Channels: <code>trixie</code> (stable), <code>trixie-testing</code>.
+Archive key: <a href="linbox-archive-keyring.asc">linbox-archive-keyring.asc</a>.</p>
+<p>Source: <a href="https://github.com/tovganesh/linbox-os">github.com/tovganesh/linbox-os</a></p>
+EOF
+echo "==> Site ready in $SITE ($(du -sh "$SITE" | cut -f1))"

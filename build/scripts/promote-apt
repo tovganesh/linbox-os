@@ -1,0 +1,29 @@
+#!/bin/bash
+# Promote one package version from trixie-testing to trixie (stable), unchanged:
+# the same .deb is referenced by both suites, nothing is rebuilt (decision D6).
+#
+#   promote-apt STATE_DIR PACKAGE VERSION
+#
+# Then run publish-apt STATE_DIR SITE_DIR trixie to re-sign and rebuild the site.
+set -euo pipefail
+
+die() { echo "E: $*" >&2; exit 1; }
+[ $# -eq 3 ] || die "usage: $0 STATE_DIR PACKAGE VERSION"
+STATE=$1 PKG=$2 VERSION=$3
+[[ $PKG =~ ^[a-z0-9][a-z0-9+.-]+$ ]] || die "invalid package name: $PKG"
+
+# shellcheck disable=SC2016 # ${version} is a reprepro format field, not a shell variable
+FMT='${version}\n'
+have=$(reprepro -b "$STATE" --list-format "$FMT" list trixie-testing "$PKG")
+[ -n "$have" ] || die "$PKG is not in trixie-testing"
+[ "$have" = "$VERSION" ] ||
+	die "trixie-testing has $PKG $have, not $VERSION; only the version under test can be promoted"
+
+stable=$(reprepro -b "$STATE" --list-format "$FMT" list trixie "$PKG")
+if [ -n "$stable" ] && dpkg --compare-versions "$stable" ge "$VERSION"; then
+	die "trixie already has $PKG $stable (>= $VERSION)"
+fi
+
+echo "==> Promoting $PKG $VERSION: trixie-testing -> trixie"
+reprepro -b "$STATE" copy trixie trixie-testing "$PKG"
+reprepro -b "$STATE" list trixie "$PKG"

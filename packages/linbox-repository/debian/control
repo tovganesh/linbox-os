@@ -1,0 +1,19 @@
+Source: linbox-repository
+Section: admin
+Priority: optional
+Maintainer: Linbox OS Developers <os@linbox.in>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Homepage: https://github.com/tovganesh/linbox-os
+Rules-Requires-Root: no
+
+Package: linbox-repository
+Architecture: all
+Depends: linbox-keyring, ${misc:Depends}
+Description: APT source for the Linbox OS repository
+ Adds https://apt.linbox.in to APT as /etc/apt/sources.list.d/linbox.sources,
+ restricted to the Linbox archive keys by Signed-By. Debian packages keep
+ coming from Debian's own mirrors.
+ .
+ The channel is trixie-testing during development. To change it, edit the
+ Suites line; dpkg keeps your edit on upgrades.

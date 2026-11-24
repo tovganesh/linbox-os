@@ -1,0 +1,31 @@
+#!/bin/bash
+# Build Linbox packages from packages/<name>/ into OUTDIR (binary-only, unsigned).
+# Sources are copied to a scratch dir first, so the source tree is never written to.
+#
+#   build-packages OUTDIR [NAME...]     (default: every packages/*/ with a debian/ dir)
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/../.." && pwd -P)
+[ $# -ge 1 ] || { echo "usage: $0 OUTDIR [NAME...]" >&2; exit 2; }
+OUTDIR=$1; shift
+if [ $# -eq 0 ]; then
+	for d in "$ROOT"/packages/*/debian; do set -- "$@" "$(basename "$(dirname "$d")")"; done
+fi
+
+SCRATCH=$(mktemp -d)
+trap 'rm -rf "$SCRATCH"' EXIT
+mkdir -p "$OUTDIR"
+
+for name in "$@"; do
+	src=$ROOT/packages/$name
+	[ -d "$src/debian" ] || { echo "E: $src is not a Debian package" >&2; exit 1; }
+	echo "==> Building $name"
+	cp -r "$src" "$SCRATCH/$name"
+	# File modes from a Windows bind mount (Docker Desktop) are all 0755: reset them.
+	find "$SCRATCH/$name" -type d -exec chmod 0755 {} +
+	find "$SCRATCH/$name" -type f -exec chmod 0644 {} +
+	chmod 0755 "$SCRATCH/$name/debian/rules"
+	(cd "$SCRATCH/$name" && dpkg-buildpackage -b -us -uc)
+done
+mv "$SCRATCH"/*.deb "$OUTDIR/"
+ls -l "$OUTDIR"

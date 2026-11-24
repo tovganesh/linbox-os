@@ -24,35 +24,15 @@ normalize_modes() {
 
 [ "$(id -u)" -eq 0 ] || { echo "E: must run as root inside the build container" >&2; exit 1; }
 
-# --- 1. Read the manifest -----------------------------------------------------
-# The container's own apt is pointed at the same snapshot first, so build tools are pinned too.
+# --- 1. Build environment and manifest ----------------------------------------
+# The container's own apt is pinned to the manifest's snapshot, so build tools are pinned too.
 SNAPSHOT=$(sed -n 's/^  snapshot: "\(.*\)"$/\1/p' "$MANIFEST")
 [ -n "$SNAPSHOT" ] || { echo "E: no base.snapshot in $MANIFEST" >&2; exit 1; }
 SNAP=http://snapshot.debian.org/archive/debian/$SNAPSHOT
 SNAP_SEC=http://snapshot.debian.org/archive/debian-security/$SNAPSHOT
 
-log "Pinning build container apt to snapshot $SNAPSHOT"
-rm -f /etc/apt/sources.list.d/debian.sources
-cat > /etc/apt/sources.list.d/snapshot.sources <<EOF
-Types: deb
-URIs: $SNAP
-Suites: trixie trixie-updates
-Components: main
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-Check-Valid-Until: no
-
-Types: deb
-URIs: $SNAP_SEC
-Suites: trixie-security
-Components: main
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-Check-Valid-Until: no
-EOF
-export DEBIAN_FRONTEND=noninteractive
-apt-get -o Acquire::Retries=5 update -q
-apt-get -o Acquire::Retries=5 install -y -q --no-install-recommends \
-	live-build debootstrap python3 python3-yaml build-essential dpkg-dev debhelper fakeroot \
-	xorriso squashfs-tools mtools dosfstools ca-certificates cpio
+MANIFEST=$MANIFEST "$SRC/build/scripts/setup-build-env" \
+	live-build debootstrap xorriso squashfs-tools mtools dosfstools cpio
 
 eval "$(python3 - "$MANIFEST" <<'PY'
 import shlex, sys, yaml
@@ -62,6 +42,7 @@ assert b["distribution"] == "debian" and m["display"]["xorg"] is False
 for k, v in {
     "VERSION": r["version"], "STAGE": r["stage"], "ARCH": r["arch"],
     "SUITE": b["suite"], "AREAS": " ".join(b["components"]),
+    "PACKAGES": " ".join(m["packages"]),
 }.items():
     print(f"{k}={shlex.quote(str(v))}")
 PY
@@ -74,18 +55,10 @@ NAME="linbox-os-${VERSION}-${STAGE}-${BUILD_ID}-${ARCH}"
 GIT_COMMIT=${GIT_COMMIT:-unknown}
 
 # --- 2. Build Linbox packages -------------------------------------------------
-log "Building Linbox packages"
-rm -rf "$WORK/pkgs" && mkdir -p "$WORK/pkgs/debs"
-for dir in "$SRC"/packages/*/; do
-	[ -d "$dir/debian" ] || continue
-	name=$(basename "$dir")
-	cp -r "$dir" "$WORK/pkgs/$name"
-	normalize_modes "$WORK/pkgs/$name"
-	chmod 0755 "$WORK/pkgs/$name/debian/rules"
-	(cd "$WORK/pkgs/$name" && dpkg-buildpackage -b -us -uc)
-done
-mv "$WORK"/pkgs/*.deb "$WORK/pkgs/debs/"
-ls -l "$WORK/pkgs/debs"
+log "Building Linbox packages: $PACKAGES"
+rm -rf "$WORK/pkgs"
+# shellcheck disable=SC2086 # PACKAGES is a space-separated list of names
+"$SRC/build/scripts/build-packages" "$WORK/pkgs/debs" $PACKAGES
 
 # --- 3. Configure live-build --------------------------------------------------
 log "Configuring live-build"

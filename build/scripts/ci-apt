@@ -1,0 +1,47 @@
+#!/bin/bash
+# CI entry point for the APT repository. Runs as root in a throwaway debian:trixie
+# container with the source tree at /src (read-only) and a scratch dir at /work:
+#
+#   /work/state   reprepro state (a checkout of the apt-repo branch; updated here)
+#   /work/site    output: the tree to deploy to GitHub Pages
+#
+#   ci-apt publish                    build every package, add new versions to trixie-testing
+#   ci-apt promote PACKAGE VERSION    copy PACKAGE VERSION from trixie-testing to trixie
+#
+# Environment (from GitHub secrets):
+#   LINBOX_APT_SIGNING_KEY         armored secret signing subkey (tools/make-archive-key)
+#   LINBOX_APT_SIGNING_PASSPHRASE  its passphrase
+set -euo pipefail
+
+SRC=$(cd "$(dirname "$0")/../.." && pwd -P)
+WORK=${WORK:-/work}
+die() { echo "E: $*" >&2; exit 1; }
+
+: "${LINBOX_APT_SIGNING_KEY:?missing secret LINBOX_APT_SIGNING_KEY (see docs/apt-repository.md)}"
+export SIGNING_PASSPHRASE=${LINBOX_APT_SIGNING_PASSPHRASE:?missing secret LINBOX_APT_SIGNING_PASSPHRASE}
+
+"$SRC/build/scripts/setup-build-env" reprepro gnupg gpgv
+
+GNUPGHOME=$(mktemp -d)
+export GNUPGHOME
+trap 'gpgconf --kill gpg-agent >/dev/null 2>&1 || true; rm -rf "$GNUPGHOME"' EXIT
+printf '%s\n' "$LINBOX_APT_SIGNING_KEY" | gpg --batch --quiet --import
+unset LINBOX_APT_SIGNING_KEY
+# The signing-capable secret subkey (capabilities field contains "s").
+SIGNING_KEY=$(gpg --batch --with-colons --list-secret-keys |
+	awk -F: '$1 == "ssb" && $12 ~ /s/ {s = 1; next} s && $1 == "fpr" {print $10; exit}')
+[ -n "$SIGNING_KEY" ] || die "no secret signing subkey in LINBOX_APT_SIGNING_KEY"
+export SIGNING_KEY
+
+case "${1:-}" in
+publish)
+	"$SRC/build/scripts/build-packages" "$WORK/debs"
+	"$SRC/build/scripts/publish-apt" "$WORK/state" "$WORK/site" trixie-testing "$WORK"/debs/*.deb
+	;;
+promote)
+	[ $# -eq 3 ] || die "usage: $0 promote PACKAGE VERSION"
+	"$SRC/build/scripts/promote-apt" "$WORK/state" "$2" "$3"
+	"$SRC/build/scripts/publish-apt" "$WORK/state" "$WORK/site" trixie
+	;;
+*) die "usage: $0 publish | promote PACKAGE VERSION" ;;
+esac

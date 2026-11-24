@@ -1,0 +1,13 @@
+Origin: Linbox
+Label: Linbox
+Codename: trixie
+Architectures: amd64
+Components: main
+Description: Linbox OS 1 (Debian 13 trixie) - stable channel
+
+Origin: Linbox
+Label: Linbox
+Codename: trixie-testing
+Architectures: amd64
+Components: main
+Description: Linbox OS 1 (Debian 13 trixie) - testing channel

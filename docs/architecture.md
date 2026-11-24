@@ -172,11 +172,17 @@ All packages are Debian-native, built with `debhelper`, and live under
   "testing" distribution. Packages are built once, land in testing, and are
   **promoted** (copied) to stable unchanged. There are no rebuilds between
   channels.
-- **Hosting (D5):** **reprepro** run by CI, published to static hosting
-  (object storage + CDN). The signing subkey lives in CI secrets and the
-  primary key stays offline. Launchpad PPAs are Ubuntu-only, so they're no
-  longer an option. The alternative is openSUSE Build Service (it builds and
-  hosts Debian packages, but holds our signing key).
+- **Hosting (D5):** **reprepro** run by CI. The reprepro state (`conf/`,
+  `db/`, `dists/`, `pool/`) lives on the `apt-repo` branch; the public part is
+  deployed to **GitHub Pages** with the custom domain `apt.linbox.in`. Pages
+  is free for public repositories; its limits (about 1 GB per site, a soft
+  100 GB/month of traffic, 100 MB per file) fit a repository that holds only
+  Linbox's own small packages, because Debian packages come from Debian. If
+  the limits are reached, the same tree moves to object storage behind the
+  same domain. Trust does not depend on the host: APT checks every `Release`
+  file against the Linbox archive key. The signing subkey lives in CI secrets
+  and the primary key stays offline with the maintainer. Details:
+  [apt-repository.md](apt-repository.md).
 - **Debian's archive is used directly** (`deb.debian.org`,
   `security.debian.org`). We don't mirror or filter it.
 - **Third-party repositories** are never enabled in the base image. Developer
@@ -252,7 +258,7 @@ Also removed: the Canonical trademark risk.
 | **D2** | Display server | **Decided (maintainer, 2026-11-22):** Wayland only, no Xorg. **Approved:** Xwayland kept for app compatibility. | No Xwayland: breaks X11-only developer tools |
 | **D3** | Desktop environment | **Decided (maintainer, 2026-11-22):** **KDE Plasma 6 on Wayland** | Xfce 4.20 on labwc (experimental); GNOME 48; custom compositor stack |
 | **D4** | ISO build tool + installer | **Approved (2026-11-22):** live-build + Calamares | debian-installer + debian-cd; mkosi/debos (no installer); remastering Debian's live ISO |
-| **D5** | Package hosting | **Approved (2026-11-22):** reprepro in CI → static hosting at apt.linbox.in | openSUSE Build Service; aptly; GitHub Pages (size limits) |
+| **D5** | Package hosting | **Approved (2026-11-22), hosting amended (maintainer, 2026-11-23):** reprepro in CI → **GitHub Pages** at apt.linbox.in (free, no card on file). Move to object storage if Pages limits are reached; the URL stays the same. | openSUSE Build Service; aptly; Cloudflare R2 (needs a card on file and DNS on Cloudflare); S3 + CloudFront (paid egress) |
 | **D6** | Channel model | **Approved (2026-11-22):** `trixie` and `trixie-testing`, promotion without rebuild | Single channel plus tags |
 | **D7** | OS identity | **Approved (2026-11-22):** `ID=linbox`, `ID_LIKE=debian`, keep `VERSION_CODENAME=trixie` | Keep `ID=debian` and change only `NAME`/`PRETTY_NAME` |
 | **D8** | App delivery | **Approved (2026-11-22):** Debian debs only in base, no snapd, Firefox ESR. Flatpak/Flathub opt-in via Developer Setup. | Flathub enabled by default; Mozilla's APT repo for current Firefox |

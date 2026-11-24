@@ -15,14 +15,15 @@ or filtered. Users get Debian security updates directly from Debian. Linbox suit
 
 ## Package flow
 
-1. A PR is merged into `main`. CI builds the package and lints it
-   (`lintian`, `shellcheck`, tests).
-2. A version is tagged (`<package>/<version>`), and the source is uploaded to
-   **testing**.
+1. A PR bumps the package version in `debian/changelog`. CI tests the
+   repository tooling end to end (`shellcheck`, `tests/apt/test-repo`).
+2. On merge into `main`, CI builds every package and publishes new versions to
+   **testing**. An unchanged version with changed content fails the job.
+   Details: [apt-repository.md](apt-repository.md).
 3. Validation: a fresh VM install plus an upgrade from the current stable,
    then `linbox doctor`, plus a manual check for desktop-visible changes.
-4. **Promote** the package to stable by copying it without rebuilding. Record
-   it in the channel changelog.
+4. **Promote** the package to stable by copying it without rebuilding (the
+   APT workflow's manual run). Record it in the channel changelog.
 5. **Rollback** means uploading a higher version that reverts the change.
    We never delete a published version.
 
